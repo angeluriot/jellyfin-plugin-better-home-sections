@@ -1,0 +1,11 @@
+[
+    {
+        "guid": "80baa139-52ad-44e9-8d33-a45544c4a962",
+        "name": "Better Home Sections",
+        "description": "Replaces the home screen sections with sections configured by the administrator: continue watching, next up, recently added, illustrated genres, studios and networks, genre / studio / collection rows, collections and favorites.",
+        "overview": "Fully configurable home screen sections",
+        "owner": "angeluriot",
+        "category": "General",
+        "versions": []
+    }
+]

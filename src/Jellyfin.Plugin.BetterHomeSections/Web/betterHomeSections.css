@@ -1,0 +1,100 @@
+/*
+ * Better Home Sections - genre and studio tiles, inspired by Seerr.
+ * The cards use the native markup, so only the tile content is styled here.
+ */
+
+.bhs-tile-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    isolation: isolate;
+    container-type: inline-size;
+    color: #fff;
+    text-decoration: none;
+}
+
+.bhs-tile-image,
+.bhs-tile-tint,
+.bhs-tile-overlay {
+    position: absolute;
+    inset: 0;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+}
+
+.bhs-tile-name {
+    position: relative;
+    z-index: 1;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 0 6%;
+    font-size: 1.6em;
+    font-size: 11cqi;
+    font-weight: 700;
+    line-height: 1.15;
+    text-align: center;
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+    overflow-wrap: anywhere;
+}
+
+.bhs-tile-overlay {
+    transition: background-color 0.3s ease-in-out;
+}
+
+/* Genres: random item of the genre drawn in duotone (shadows in the dark color, highlights in the light one) */
+
+.bhs-genreTile .bhs-tile-content {
+    background-color: var(--bhs-tone-light);
+}
+
+.bhs-genreTile .bhs-tile-content.bhs-tile-noImage {
+    background-image: linear-gradient(135deg, var(--bhs-tone-dark), var(--bhs-tone-light));
+}
+
+.bhs-genreTile .bhs-tile-image {
+    filter: grayscale(1) contrast(1.1);
+    mix-blend-mode: multiply;
+}
+
+.bhs-genreTile .bhs-tile-tint {
+    background-color: var(--bhs-tone-dark);
+    mix-blend-mode: lighten;
+}
+
+.bhs-genreTile .bhs-tile-overlay {
+    background-color: rgba(31, 41, 55, 0.3);
+}
+
+.bhs-genreTile:hover .bhs-tile-overlay,
+.bhs-genreTile:focus-within .bhs-tile-overlay {
+    background-color: rgba(31, 41, 55, 0.1);
+}
+
+/* Studios and networks: logo drawn in white on a dark tile, or the studio thumbnail */
+
+.bhs-studioTile .bhs-tile-content {
+    background-color: #1f2937;
+    transition: background-color 0.3s ease-in-out;
+}
+
+.bhs-studioTile:hover .bhs-tile-content,
+.bhs-studioTile:focus-within .bhs-tile-content {
+    background-color: #374151;
+}
+
+.bhs-studioTile .bhs-tile-image {
+    z-index: 1;
+}
+
+.bhs-studioTile .bhs-tile-logo {
+    inset: 18% 14%;
+    background-size: contain;
+    /* Duotone from white (shadows) to light gray (highlights), like the logos of Seerr */
+    filter: grayscale(1) invert(1) contrast(0.156) brightness(1.73);
+}
+
+.bhs-studioTile .bhs-tile-overlay {
+    background-image: linear-gradient(to top, rgba(17, 24, 39, 0.8), transparent 40%);
+}
