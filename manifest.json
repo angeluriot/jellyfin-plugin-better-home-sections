@@ -8,6 +8,14 @@
         "category": "General",
         "versions": [
             {
+                "version": "1.0.1.0",
+                "changelog": "Only movies and series in the sections (except Continue Watching, Next Up and Favorites), item counts only count movies and series, genre and studio titles always link to their page, settings page improvements.",
+                "targetAbi": "12.1.0.0",
+                "sourceUrl": "https://github.com/angeluriot/jellyfin-plugin-better-home-sections/releases/download/v1.0.1.0/better-home-sections_1.0.1.0.zip",
+                "checksum": "9b2455d1a6737627af35d518d1c0a793",
+                "timestamp": "2026-10-10T01:58:01Z"
+            },
+            {
                 "version": "1.0.0.0",
                 "changelog": "Initial release.",
                 "targetAbi": "12.1.0.0",
