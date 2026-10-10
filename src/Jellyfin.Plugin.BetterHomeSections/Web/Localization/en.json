@@ -53,7 +53,6 @@
     "ConfigOrder": "Order",
     "ConfigTitle": "Custom title",
     "ConfigTitleHelp": "Optional, replaces the generated title.",
-    "ConfigVisible": "Visible",
     "ConfigHidden": "Hidden",
     "ConfigShow": "Show",
     "ConfigHide": "Hide",

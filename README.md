@@ -39,9 +39,9 @@ Except Continue Watching, Next Up and Favorites, the sections only contain movie
 | Continue Watching | Same as Jellyfin | Jellyfin default | - |
 | Next Up | Same as Jellyfin | Jellyfin default | Next up list |
 | Recently added | Latest items of a library | Last added first | The library |
-| Genres | Genres of a library, illustrated with a random item like in Seerr | Most items first, Random | The genres of the library |
+| Genres | Genres of a library, illustrated with a random item of the genre like in Seerr | Most items first, Random | The genres of the library |
 | Genre | Items of a library with a genre | Last added first, Random | The genre (in the library) |
-| Studios / networks | Studios / networks of a library, with their logo | Most items first, Random | The studios / networks of the library |
+| Studios / networks | Studios / networks of a library, displayed like in the Jellyfin studios page | Most items first, Random | The studios / networks of the library |
 | Studio / network | Items of a library from a studio / network | Last added first, Random | The studio / network (in the library) |
 | Collections | The collections | Most items first, Last added first, Random | The collections |
 | Collection | Items of a collection | Last added first, Random | The collection |

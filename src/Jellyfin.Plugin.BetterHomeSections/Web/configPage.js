@@ -260,9 +260,6 @@ class ConfigPage {
                 + '" value="' + escapeHtml(section.Title) + '" />'
                 + '<div class="fieldDescription">' + escapeHtml(t('ConfigTitleHelp')) + '</div></div>';
 
-            html += '<label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" data-field="Visible"'
-                + (section.Visible ? ' checked' : '') + ' /><span>' + escapeHtml(t('ConfigVisible')) + '</span></label>';
-
             container.innerHTML = html;
             container.classList.remove('hide');
         });
@@ -358,11 +355,7 @@ class ConfigPage {
         }
 
         const section = this.findSection(row.getAttribute('data-id'));
-        if (field === 'Visible') {
-            section.Visible = event.target.checked;
-        } else {
-            section[field] = event.target.value;
-        }
+        section[field] = event.target.value;
         if (field === 'LibraryId') {
             // The genres and studios depend on the library
             section.ItemId = '';

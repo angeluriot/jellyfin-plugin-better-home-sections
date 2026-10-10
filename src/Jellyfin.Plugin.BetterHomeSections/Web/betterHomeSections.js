@@ -102,7 +102,7 @@
             orders: ['MostItems', 'Random'],
             viewMode: 'Landscape',
             fetch: fetchGenreTiles,
-            render: renderTiles
+            render: renderCategories
         },
         Genre: {
             icon: 'local_offer',
@@ -119,8 +119,8 @@
             usesLibrary: true,
             orders: ['MostItems', 'Random'],
             viewMode: 'Landscape',
-            fetch: fetchStudioTiles,
-            render: renderTiles
+            fetch: fetchStudios,
+            render: renderCategories
         },
         Studio: {
             icon: 'apartment',
@@ -671,6 +671,7 @@
         });
     }
 
+    /** Genres with a random item of each genre (BhsImageUrl) and a random color (BhsTone) to illustrate them. */
     function fetchGenreTiles(section, ctx) {
         const landscape = section.ViewMode === 'Landscape';
         const imageType = landscape ? 'Backdrop' : 'Primary';
@@ -679,44 +680,22 @@
         return fetchCategories(section, ctx, path, IMAGE_TYPES).then(function (genres) {
             return pickGenreItems(section, ctx, genres, imageType).then(function (picks) {
                 const tones = shuffle(GENRE_TONES);
-                return genres.map(function (genre, index) {
+                genres.forEach(function (genre, index) {
                     const item = picks[genre.Id];
-                    let imageUrl = item ? getImageUrl(ctx, item.Id, imageType, getImageTag(item, imageType), landscape) : null;
-                    if (!imageUrl && getImageTag(genre, imageType)) {
-                        imageUrl = getImageUrl(ctx, genre.Id, imageType, getImageTag(genre, imageType), landscape);
+                    if (item) {
+                        genre.BhsImageUrl = getImageUrl(ctx, item.Id, imageType, getImageTag(item, imageType), landscape);
+                    } else if (getImageTag(genre, imageType)) {
+                        genre.BhsImageUrl = getImageUrl(ctx, genre.Id, imageType, getImageTag(genre, imageType), landscape);
                     }
-                    return {
-                        kind: 'genre',
-                        item: genre,
-                        name: genre.Name,
-                        url: getGenreUrl(ctx, genre.Id, section.Library),
-                        imageUrl: imageUrl,
-                        tone: tones[index % tones.length]
-                    };
+                    genre.BhsTone = tones[index % tones.length];
                 });
+                return genres;
             });
         });
     }
 
-    function fetchStudioTiles(section, ctx) {
-        const landscape = section.ViewMode === 'Landscape';
-
-        return fetchCategories(section, ctx, 'Studios', 'Thumb,Primary,Logo').then(function (studios) {
-            return studios.map(function (studio) {
-                // Thumbs are complete illustrations, primary images and logos are logos drawn in white like in Seerr
-                const imageType = ['Thumb', 'Primary', 'Logo'].find(function (type) {
-                    return getImageTag(studio, type);
-                });
-                return {
-                    kind: 'studio',
-                    item: studio,
-                    name: studio.Name,
-                    url: getStudioUrl(ctx, studio.Id, section.Library),
-                    imageUrl: imageType ? getImageUrl(ctx, studio.Id, imageType, getImageTag(studio, imageType), landscape) : null,
-                    isLogo: imageType === 'Primary' || imageType === 'Logo'
-                };
-            });
-        });
+    function fetchStudios(section, ctx) {
+        return fetchCategories(section, ctx, 'Studios', IMAGE_TYPES);
     }
 
     // --------------------------------------------------------------- rendering
@@ -850,31 +829,62 @@
         });
     }
 
-    /** Illustrated tiles of genres and studios, inspired by Seerr. */
-    function renderTiles(tiles, section, ctx) {
-        const shape = getShape(section);
+    /**
+     * Replaces the image of the genre cards rendered by the web client with a random item of the genre drawn in duotone
+     * with the name of the genre on it, like in Seerr. The rest of the card stays the native one.
+     */
+    function illustrateGenreCards(html, genres) {
+        const template = document.createElement('template');
+        template.innerHTML = html;
 
-        return tiles.map(function (tile, index) {
-            const kindClass = tile.kind === 'genre' ? 'bhs-genreTile' : 'bhs-studioTile';
-            const style = tile.tone ? ' style="--bhs-tone-dark:#' + tile.tone[0] + ';--bhs-tone-light:#' + tile.tone[1] + '"' : '';
-            const imageClass = 'bhs-tile-image' + (tile.isLogo ? ' bhs-tile-logo' : '');
-            // Studio images are logos, which replace the name like in Seerr
-            const showName = tile.kind === 'genre' || !tile.imageUrl;
+        genres.forEach(function (genre) {
+            const card = template.content.querySelector('.card[data-id="' + genre.Id + '"]');
+            const image = card ? card.querySelector('.cardImageContainer') : null;
+            if (!image) {
+                return;
+            }
 
-            return '<div class="card ' + shape + 'Card card-hoverable bhs-tile ' + kindClass + '" data-index="' + index
-                + '" data-id="' + escapeHtml(tile.item.Id) + '" data-serverid="' + escapeHtml(ctx.serverId)
-                + '" data-type="' + escapeHtml(tile.item.Type) + '" data-isfolder="true">'
-                + '<div class="cardBox"><div class="cardScalable">'
-                + '<div class="cardPadder cardPadder-' + shape + '"></div>'
-                + '<a href="' + escapeHtml(tile.url) + '" class="cardImageContainer cardContent bhs-tile-content'
-                + (tile.imageUrl ? '' : ' bhs-tile-noImage') + '"' + style + ' title="' + escapeHtml(tile.name) + '">'
-                + (tile.imageUrl ? '<div class="' + imageClass + ' lazy" data-src="' + escapeHtml(tile.imageUrl) + '"></div>' : '')
-                + '<div class="bhs-tile-tint"></div>'
-                + '<div class="bhs-tile-overlay"></div>'
-                + (showName ? '<div class="bhs-tile-name">' + escapeHtml(tile.name) + '</div>' : '')
-                + '</a>'
-                + '</div></div></div>';
-        }).join('');
+            card.querySelectorAll('.blurhash-canvas').forEach(function (canvas) {
+                canvas.remove();
+            });
+            image.removeAttribute('data-src');
+            image.removeAttribute('data-blurhash');
+            image.className = image.className.split(' ').filter(function (name) {
+                return name !== 'lazy' && name !== 'blurhashed' && name.indexOf('defaultCardBackground') !== 0;
+            }).concat(['bhs-genreImage'], genre.BhsImageUrl ? [] : ['bhs-genreImage-empty']).join(' ');
+            image.style.setProperty('--bhs-tone-dark', '#' + genre.BhsTone[0]);
+            image.style.setProperty('--bhs-tone-light', '#' + genre.BhsTone[1]);
+            image.innerHTML = (genre.BhsImageUrl ? '<div class="bhs-genreImage-picture lazy" data-src="' + escapeHtml(genre.BhsImageUrl) + '"></div>' : '')
+                + '<div class="bhs-genreImage-tint"></div>'
+                + '<div class="bhs-genreImage-overlay"></div>'
+                + '<div class="bhs-genreImage-name">' + escapeHtml(genre.Name) + '</div>';
+        });
+
+        return template.innerHTML;
+    }
+
+    /** Genre and studio cards, rendered like the ones of the genres and studios pages of Jellyfin. */
+    function renderCategories(items, section, ctx) {
+        const builder = getCardBuilder();
+        if (!builder) {
+            return renderSimpleCards(items, section, ctx);
+        }
+
+        const html = builder.getCardsHtml({
+            items: items,
+            shape: getShape(section),
+            preferThumb: section.ViewMode === 'Landscape' ? true : null,
+            parentId: getLibraryId(section),
+            context: 'home',
+            showTitle: true,
+            centerText: true,
+            overlayMoreButton: true,
+            allowBottomPadding: false,
+            cardLayout: false,
+            lazy: true
+        });
+
+        return section.Type === 'Genres' ? illustrateGenreCards(html, items) : html;
     }
 
     function getSectionHeaderHtml(title, url) {
@@ -885,7 +895,8 @@
                 + '<span class="material-icons chevron_right" aria-hidden="true"></span>'
                 + '</a>';
         } else {
-            html += '<h2 class="sectionTitle sectionTitle-cards">' + escapeHtml(title) + '</h2>';
+            // Same structure and spacing as the titles with a link
+            html += '<div class="sectionTitleTextButton bhs-sectionTitle"><h2 class="sectionTitle sectionTitle-cards">' + escapeHtml(title) + '</h2></div>';
         }
         return html + '</div>';
     }
