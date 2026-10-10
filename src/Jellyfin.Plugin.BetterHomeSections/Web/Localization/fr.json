@@ -36,7 +36,6 @@
 
     "ConfigGeneral": "Général",
     "ConfigLanguage": "Langue",
-    "ConfigLanguageDefault": "Langue de l'interface de Jellyfin",
     "ConfigCommitHash": "Hash de commit",
     "ConfigCommitHashHelp": "Optionnel, pour les tests. Charge les fichiers web du plugin (écran d'accueil, page de paramètres et traductions) depuis ce commit du dépôt GitHub au lieu de ceux inclus dans le plugin. Laisser vide en utilisation normale.",
     "ConfigSections": "Sections",
@@ -62,7 +61,6 @@
     "ConfigMoveDown": "Descendre",
     "ConfigEdit": "Modifier",
     "ConfigRemove": "Supprimer",
-    "ConfigDone": "Terminé",
     "ConfigSave": "Enregistrer",
     "ConfigMissingItem": "Choisissez un genre, un studio ou une collection pour chaque section avant d'enregistrer.",
     "ConfigMissingDependency": "Le script du plugin n'est pas chargé dans le client web. Vérifiez que le plugin File Transformation est installé, puis redémarrez le serveur."

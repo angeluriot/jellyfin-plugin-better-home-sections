@@ -5,7 +5,7 @@ A **Jellyfin** plugin that replaces the home screen sections with sections confi
 * The sections are the same for every user and can only be changed by the administrator
 * Sections and genres / studios without content are hidden automatically
 * Cards are rendered by the Jellyfin web client itself, so themes (like **[ElegantFin](https://github.com/mihaif7/elegantfin-jf12)**) and other plugins (like **[Jellyfin Enhanced](https://github.com/n00bcodr/Jellyfin-Enhanced)** or **[Media Bar](https://github.com/IAmParadox27/jellyfin-plugin-media-bar)**) keep working
-* Translated in English and French (the language of the Jellyfin interface is used by default)
+* Translated in English and French
 
 ## Requirements
 
@@ -26,11 +26,13 @@ A **Jellyfin** plugin that replaces the home screen sections with sections confi
 
 Open **Dashboard > Plugins > Better Home Sections** (also in the dashboard menu).
 
-* **Language**: the language of the section titles, the language of the Jellyfin interface by default
+* **Language**: the language of the section titles, French by default if the Jellyfin interface is in French, English otherwise
 * **Commit hash**: see [Testing changes](#testing-changes), leave empty otherwise
-* **Sections**: add, edit, hide, reorder and remove the sections displayed on the home screen, in order
+* **Sections**: add, edit (click a section), hide, reorder and remove the sections displayed on the home screen, in order
 
 Each section has a view mode (portrait or landscape), an order, a visibility toggle and an optional custom title. Depending on its type, it can also be limited to a library (or all of them), and be about a genre, a studio / network or a collection.
+
+Except Continue Watching, Next Up and Favorites, the sections only contain movies and series (never seasons or episodes), and "Most items first" only counts the movies and series.
 
 | Section | Content | Orders | Title links to |
 | --- | --- | --- | --- |
@@ -38,9 +40,9 @@ Each section has a view mode (portrait or landscape), an order, a visibility tog
 | Next Up | Same as Jellyfin | Jellyfin default | Next up list |
 | Recently added | Latest items of a library | Last added first | The library |
 | Genres | Genres of a library, illustrated with a random item like in Seerr | Most items first, Random | The genres of the library |
-| Genre | Items of a library with a genre | Last added first, Random | The genre in the library |
+| Genre | Items of a library with a genre | Last added first, Random | The genre (in the library) |
 | Studios / networks | Studios / networks of a library, with their logo | Most items first, Random | The studios / networks of the library |
-| Studio / network | Items of a library from a studio / network | Last added first, Random | The studio in the library |
+| Studio / network | Items of a library from a studio / network | Last added first, Random | The studio / network (in the library) |
 | Collections | The collections | Most items first, Last added first, Random | The collections |
 | Collection | Items of a collection | Last added first, Random | The collection |
 | Favorites | Favorites of the user | Jellyfin default | The favorites |

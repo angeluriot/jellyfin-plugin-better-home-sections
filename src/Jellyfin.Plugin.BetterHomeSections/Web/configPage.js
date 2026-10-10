@@ -135,14 +135,17 @@ class ConfigPage {
 
     render() {
         const t = this.t;
-        const languageOptions = [{ value: '', label: t('ConfigLanguageDefault') }].concat(this.settings.Languages.map(function (language) {
+        const languageOptions = this.settings.Languages.map(function (language) {
             return { value: language.Code, label: language.Name };
-        }));
+        });
         const typeOptions = Object.keys(this.bhs.sectionTypes).map(function (type) {
             return { value: type, label: t('Type' + type) };
         });
 
-        this.root.innerHTML = '<form class="bhsForm">'
+        // The select of the new section has its label outside, so it is aligned with the button next to it
+        this.root.innerHTML = '<style>.bhsAddRow .selectLabel{display:none}'
+            + '.bhsAddRow .selectArrowContainer{top:0;bottom:0;display:flex;align-items:center}.bhsAddRow .selectArrow{margin:0}</style>'
+            + '<form class="bhsForm">'
             + '<div class="verticalSection">'
             + '<div class="sectionTitleContainer flex align-items-center"><h2 class="sectionTitle">Better Home Sections</h2></div>'
             + (this.isScriptMissing ? '<p class="fieldDescription" style="color:#e57373">' + escapeHtml(t('ConfigMissingDependency')) + '</p>' : '')
@@ -157,10 +160,11 @@ class ConfigPage {
             + '<h3>' + escapeHtml(t('ConfigSections')) + '</h3>'
             + '<p class="fieldDescription">' + escapeHtml(t('ConfigSectionsHelp')) + '</p>'
             + '<div class="paperList bhsSections">' + this.renderSections() + '</div>'
-            + '<div class="flex align-items-center" style="gap:1em;margin-top:1em">'
-            + '<div class="selectContainer flex-grow" style="margin-bottom:0"><select is="emby-select" class="bhsNewType" label="'
-            + escapeHtml(t('ConfigSectionType')) + '">' + optionsHtml(typeOptions) + '</select></div>'
-            + '<button is="emby-button" type="button" class="raised" data-action="add"><span>' + escapeHtml(t('ConfigAddSection')) + '</span></button>'
+            + '<label class="selectLabel" for="bhsNewType" style="display:block;margin-top:1.5em">' + escapeHtml(t('ConfigSectionType')) + '</label>'
+            + '<div class="flex bhsAddRow" style="gap:1em">'
+            + '<div class="selectContainer flex-grow" style="margin:0"><select is="emby-select" id="bhsNewType" class="bhsNewType">'
+            + optionsHtml(typeOptions) + '</select></div>'
+            + '<button is="emby-button" type="button" class="raised" data-action="add" style="margin:0;padding-top:0;padding-bottom:0"><span>' + escapeHtml(t('ConfigAddSection')) + '</span></button>'
             + '</div>'
             + '</div>'
             + '<button is="emby-button" type="submit" class="raised button-submit block" style="margin-top:2em"><span>' + escapeHtml(t('ConfigSave')) + '</span></button>'
@@ -180,17 +184,17 @@ class ConfigPage {
 
         return sections.map((section, index) => {
             const type = this.bhs.sectionTypes[section.Type];
-            const details = [
-                t('Type' + section.Type),
-                t('ViewMode' + section.ViewMode),
-                t('Order' + section.Order)
-            ];
+            const details = [t('Type' + section.Type), t('ViewMode' + section.ViewMode)];
+            if (type && type.orders.length > 1) {
+                details.push(t('Order' + section.Order));
+            }
             if (!section.Visible) {
                 details.push(t('ConfigHidden'));
             }
 
-            return '<div class="bhsSection" data-id="' + escapeHtml(section.Id) + '">'
-                + '<div class="listItem listItem-border"' + (section.Visible ? '' : ' style="opacity:.5"') + '>'
+            // The separator is under the settings of the section, and clicking the row opens or closes them
+            return '<div class="bhsSection listItem-border" data-id="' + escapeHtml(section.Id) + '">'
+                + '<div class="listItem" data-action="edit" style="cursor:pointer' + (section.Visible ? '' : ';opacity:.5') + '">'
                 + '<span class="material-icons listItemIcon listItemIcon-transparent ' + (type ? type.icon : 'help') + '" aria-hidden="true"></span>'
                 + '<div class="listItemBody two-line">'
                 + '<div class="listItemBodyText">' + escapeHtml(this.getTitle(section)) + '</div>'
@@ -202,7 +206,7 @@ class ConfigPage {
                 + this.iconButton('edit', 'edit', t('ConfigEdit'))
                 + this.iconButton('remove', 'delete', t('ConfigRemove'))
                 + '</div>'
-                + '<div class="bhsEditor hide" style="padding:1em 1em 1.5em"></div>'
+                + '<div class="bhsEditor hide" style="padding:1em 1em 0.5em"></div>'
                 + '</div>';
         }).join('');
     }
@@ -246,9 +250,11 @@ class ConfigPage {
                 return { value: mode, label: t('ViewMode' + mode) };
             }), section.ViewMode);
 
-            html += this.selectHtml('Order', t('ConfigOrder'), type.orders.map(function (order) {
-                return { value: order, label: t('Order' + order) };
-            }), section.Order);
+            if (type.orders.length > 1) {
+                html += this.selectHtml('Order', t('ConfigOrder'), type.orders.map(function (order) {
+                    return { value: order, label: t('Order' + order) };
+                }), section.Order);
+            }
 
             html += '<div class="inputContainer"><input is="emby-input" type="text" data-field="Title" label="' + escapeHtml(t('ConfigTitle'))
                 + '" value="' + escapeHtml(section.Title) + '" />'
@@ -256,8 +262,6 @@ class ConfigPage {
 
             html += '<label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" data-field="Visible"'
                 + (section.Visible ? ' checked' : '') + ' /><span>' + escapeHtml(t('ConfigVisible')) + '</span></label>';
-
-            html += '<button is="emby-button" type="button" class="raised" data-action="done"><span>' + escapeHtml(t('ConfigDone')) + '</span></button>';
 
             container.innerHTML = html;
             container.classList.remove('hide');
@@ -330,9 +334,6 @@ class ConfigPage {
                 }
                 sections.splice(index, 1);
                 break;
-            case 'done':
-                this.editingId = null;
-                break;
             default:
                 return;
         }
@@ -403,7 +404,8 @@ export function init(view, settings, options) {
 
     return Promise.all([
         apiClient.getPluginConfiguration(PLUGIN_ID),
-        apiClient.getJSON(apiClient.getUrl('Library/VirtualFolders')),
+        // Same order as in Jellyfin
+        apiClient.getJSON(apiClient.getUrl('UserViews', { UserId: apiClient.getCurrentUserId(), IncludeExternalContent: false })),
         apiClient.getJSON(apiClient.getUrl('Items', {
             UserId: apiClient.getCurrentUserId(),
             IncludeItemTypes: 'BoxSet',
@@ -413,13 +415,19 @@ export function init(view, settings, options) {
             EnableTotalRecordCount: false
         }))
     ]).then(function (results) {
-        const libraries = (results[1] || []).filter(function (folder) {
-            return folder.CollectionType !== 'boxsets' && folder.CollectionType !== 'playlists';
-        }).map(function (folder) {
-            return { Id: folder.ItemId, Name: folder.Name, CollectionType: folder.CollectionType };
+        const libraries = (results[1].Items || []).filter(function (view) {
+            return ['boxsets', 'playlists', 'livetv'].indexOf(view.CollectionType) === -1;
+        }).map(function (view) {
+            return { Id: view.Id, Name: view.Name, CollectionType: view.CollectionType };
         });
 
-        const page = new ConfigPage(view, settings, results[0], libraries, results[2].Items || [], options);
+        const config = results[0];
+        if (!config.Language) {
+            // Not chosen yet: the language of the Jellyfin interface if available, English otherwise
+            config.Language = window.BetterHomeSections.resolveLanguage(settings);
+        }
+
+        const page = new ConfigPage(view, settings, config, libraries, results[2].Items || [], options);
         return page.loadTranslations().then(function () {
             return page.loadReferencedItems();
         }).then(function () {

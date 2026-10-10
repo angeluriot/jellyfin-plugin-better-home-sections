@@ -36,7 +36,6 @@
 
     "ConfigGeneral": "General",
     "ConfigLanguage": "Language",
-    "ConfigLanguageDefault": "Jellyfin interface language",
     "ConfigCommitHash": "Commit hash",
     "ConfigCommitHashHelp": "Optional, for testing. Loads the web files of the plugin (home screen, settings page and translations) from this commit of the GitHub repository instead of the ones bundled with the plugin. Leave empty in normal use.",
     "ConfigSections": "Sections",
@@ -62,7 +61,6 @@
     "ConfigMoveDown": "Move down",
     "ConfigEdit": "Edit",
     "ConfigRemove": "Remove",
-    "ConfigDone": "Done",
     "ConfigSave": "Save",
     "ConfigMissingItem": "Select a genre, studio or collection for every section before saving.",
     "ConfigMissingDependency": "The script of the plugin is not loaded in the web client. Make sure the File Transformation plugin is installed, then restart the server."

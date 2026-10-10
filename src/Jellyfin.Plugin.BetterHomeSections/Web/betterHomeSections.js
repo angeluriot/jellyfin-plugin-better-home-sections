@@ -39,6 +39,14 @@
     /** Item types listed when a section is not limited to a library. */
     const ALL_ITEM_TYPES = 'Movie,Series';
 
+    /** Number of matching items of each type in a genre or studio returned by the API. */
+    const COUNT_FIELDS = {
+        Movie: 'MovieCount',
+        Series: 'SeriesCount',
+        MusicAlbum: 'AlbumCount',
+        MusicVideo: 'MusicVideoCount'
+    };
+
     const FAVORITE_ITEM_TYPES = 'Movie,Series,Season,Episode,Video,MusicVideo,MusicAlbum,Book,AudioBook,BoxSet';
 
     /** Library views of the web client and the index of their genres / studios tabs. */
@@ -216,17 +224,34 @@
         return { SortBy: 'DateCreated,SortName', SortOrder: 'Descending' };
     }
 
-    /** Orders genres, studios or collections, which have their number of items in ChildCount. */
+    /** Orders genres, studios or collections, which have their number of movies / series in ContentCount. */
     function sortByOrder(list, order) {
         if (order === 'Random') {
             return shuffle(list);
         }
         if (order === 'MostItems') {
             return list.slice().sort(function (a, b) {
-                return (b.ChildCount || 0) - (a.ChildCount || 0) || String(a.Name).localeCompare(String(b.Name));
+                return (b.ContentCount || 0) - (a.ContentCount || 0) || String(a.Name).localeCompare(String(b.Name));
             });
         }
         return list;
+    }
+
+    /**
+     * Number of items of the listed types in a genre or studio. ChildCount is not used because it also counts
+     * the episodes, seasons and collections having the genre or studio.
+     */
+    function getContentCount(category, itemTypes) {
+        let count = 0;
+        let isKnown = false;
+        itemTypes.split(',').forEach(function (type) {
+            const value = category[COUNT_FIELDS[type]];
+            if (typeof value === 'number') {
+                count += value;
+                isKnown = true;
+            }
+        });
+        return isKnown ? count : (category.ChildCount || 0);
     }
 
     // ----------------------------------------------------------- settings & i18n
@@ -395,11 +420,11 @@
             case 'Genres':
                 return library ? getLibraryUrl(ctx, library, 'genres') : null;
             case 'Genre':
-                return library ? getGenreUrl(ctx, item.Id, library) : null;
+                return getGenreUrl(ctx, item.Id, library);
             case 'Studios':
                 return library ? getLibraryUrl(ctx, library, 'studios') : null;
             case 'Studio':
-                return library ? getStudioUrl(ctx, item.Id, library) : null;
+                return getStudioUrl(ctx, item.Id, library);
             case 'Collections':
                 return getCollectionsUrl(ctx);
             case 'Collection':
@@ -455,15 +480,48 @@
         }).then(toItems);
     }
 
+    /**
+     * Latest movies / series: the latest items of Jellyfin, with the episodes and seasons replaced by their series
+     * (Jellyfin only groups them when several episodes of a series were added).
+     */
     function fetchRecentlyAdded(section, ctx) {
+        const itemTypes = getItemTypes(section.Library).split(',');
+
         return getJson(ctx, 'Items/Latest', {
             UserId: ctx.userId,
             ParentId: getLibraryId(section),
-            Limit: ITEM_LIMIT,
+            Limit: ITEM_LIMIT * 2,
             Fields: 'PrimaryImageAspectRatio,Path',
             ImageTypeLimit: 1,
             EnableImageTypes: IMAGE_TYPES
-        }).then(toItems);
+        }).then(toItems).then(function (latest) {
+            const ids = [];
+            const itemsById = {};
+            latest.forEach(function (item) {
+                const isEpisode = (item.Type === 'Episode' || item.Type === 'Season') && item.SeriesId;
+                const id = isEpisode ? item.SeriesId : item.Id;
+                if (!Object.prototype.hasOwnProperty.call(itemsById, id)) {
+                    ids.push(id);
+                    itemsById[id] = isEpisode ? null : item;
+                }
+            });
+
+            const missingIds = ids.filter(function (id) {
+                return !itemsById[id];
+            });
+            const seriesPromise = missingIds.length ? fetchItems(ctx, { Ids: missingIds.join(',') }) : Promise.resolve([]);
+
+            return seriesPromise.then(function (series) {
+                series.forEach(function (item) {
+                    itemsById[item.Id] = item;
+                });
+                return ids.map(function (id) {
+                    return itemsById[id];
+                }).filter(function (item) {
+                    return item && itemTypes.indexOf(item.Type) !== -1;
+                }).slice(0, ITEM_LIMIT);
+            });
+        });
     }
 
     function fetchGenreItems(section, ctx) {
@@ -488,19 +546,38 @@
         return fetchItems(ctx, Object.assign({
             ParentId: section.Item.Id,
             Recursive: false,
+            IncludeItemTypes: ALL_ITEM_TYPES,
             Limit: ITEM_LIMIT
         }, getSortParams(section.Order)));
     }
 
+    /** Number of movies / series in a collection, without its episodes, seasons and sub-collections. */
+    function fetchCollectionContentCount(ctx, collection) {
+        return getJson(ctx, 'Items', {
+            UserId: ctx.userId,
+            ParentId: collection.Id,
+            IncludeItemTypes: ALL_ITEM_TYPES,
+            Limit: 1,
+            EnableImages: false,
+            EnableUserData: false,
+            EnableTotalRecordCount: true
+        }).then(function (result) {
+            collection.ContentCount = result.TotalRecordCount || 0;
+        });
+    }
+
     function fetchCollections(section, ctx) {
-        // There is no API sort by number of items, so all the collections are fetched and sorted here
-        const mostItems = section.Order === 'MostItems';
-        return fetchItems(ctx, Object.assign({
-            IncludeItemTypes: 'BoxSet',
-            Fields: 'PrimaryImageAspectRatio,ChildCount',
-            Limit: mostItems ? undefined : ITEM_LIMIT
-        }, mostItems ? {} : getSortParams(section.Order))).then(function (collections) {
-            return sortByOrder(collections, section.Order).slice(0, ITEM_LIMIT);
+        if (section.Order !== 'MostItems') {
+            return fetchItems(ctx, Object.assign({ IncludeItemTypes: 'BoxSet', Limit: ITEM_LIMIT }, getSortParams(section.Order)));
+        }
+
+        // There is no API sort by number of items, so all the collections are counted and sorted here
+        return fetchItems(ctx, { IncludeItemTypes: 'BoxSet' }).then(function (collections) {
+            return Promise.all(collections.map(function (collection) {
+                return fetchCollectionContentCount(ctx, collection);
+            })).then(function () {
+                return sortByOrder(collections, section.Order).slice(0, ITEM_LIMIT);
+            });
         });
     }
 
@@ -518,17 +595,20 @@
 
     /** Genres or studios of the section having content for the user, in the section order. */
     function fetchCategories(section, ctx, path, imageTypes) {
+        const itemTypes = getItemTypes(section.Library);
+
         return getJson(ctx, path, {
             UserId: ctx.userId,
             ParentId: getLibraryId(section),
-            // Also makes the server return the number of matching items in ChildCount
-            IncludeItemTypes: getItemTypes(section.Library),
+            // Also makes the server return the number of matching items of each type
+            IncludeItemTypes: itemTypes,
             ImageTypeLimit: 1,
             EnableImageTypes: imageTypes,
             EnableTotalRecordCount: false
         }).then(function (result) {
             const categories = toItems(result).filter(function (category) {
-                return category.ChildCount === undefined || category.ChildCount > 0;
+                category.ContentCount = getContentCount(category, itemTypes);
+                return category.ContentCount > 0;
             });
             return sortByOrder(categories, section.Order).slice(0, TILE_LIMIT);
         });
@@ -911,6 +991,7 @@
         // Shared with the configuration page
         sectionTypes: SECTION_TYPES,
         getSettings: getSettings,
+        resolveLanguage: resolveLanguage,
         loadTranslator: loadTranslator,
         getSectionTitle: getSectionTitle,
         getItemTypes: getItemTypes,
