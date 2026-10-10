@@ -23,6 +23,12 @@
     /** Number of random items fetched to illustrate the genre tiles. */
     const GENRE_IMAGE_SAMPLE_SIZE = 300;
 
+    /** Maximum width of the genre pictures, in pixels. */
+    const GENRE_IMAGE_WIDTH = 480;
+
+    /** Average luminance of the genre pictures, from 0 (dark color) to 1 (light color). */
+    const GENRE_IMAGE_TARGET_LUMINANCE = 0.45;
+
     const IMAGE_TYPES = 'Primary,Backdrop,Thumb';
 
     /** Item types listed by each library type, used for the genre, studio and item queries. */
@@ -102,7 +108,8 @@
             orders: ['MostItems', 'Random'],
             viewMode: 'Landscape',
             fetch: fetchGenreTiles,
-            render: renderCategories
+            render: renderCategories,
+            afterRender: drawGenreImages
         },
         Genre: {
             icon: 'local_offer',
@@ -851,16 +858,117 @@
             image.removeAttribute('data-blurhash');
             image.className = image.className.split(' ').filter(function (name) {
                 return name !== 'lazy' && name !== 'blurhashed' && name.indexOf('defaultCardBackground') !== 0;
-            }).concat(['bhs-genreImage'], genre.BhsImageUrl ? [] : ['bhs-genreImage-empty']).join(' ');
+            }).concat(['bhs-genreImage']).join(' ');
             image.style.setProperty('--bhs-tone-dark', '#' + genre.BhsTone[0]);
             image.style.setProperty('--bhs-tone-light', '#' + genre.BhsTone[1]);
-            image.innerHTML = (genre.BhsImageUrl ? '<div class="bhs-genreImage-picture lazy" data-src="' + escapeHtml(genre.BhsImageUrl) + '"></div>' : '')
-                + '<div class="bhs-genreImage-tint"></div>'
+            // The picture is drawn by drawGenreImages once the cards are displayed
+            image.innerHTML = (genre.BhsImageUrl ? '<canvas class="bhs-genreImage-picture" data-src="' + escapeHtml(genre.BhsImageUrl)
+                + '" data-tone="' + genre.BhsTone.join(',') + '"></canvas>' : '')
                 + '<div class="bhs-genreImage-overlay"></div>'
                 + '<div class="bhs-genreImage-name">' + escapeHtml(genre.Name) + '</div>';
         });
 
         return template.innerHTML;
+    }
+
+    function hexToRgb(hex) {
+        const value = parseInt(hex, 16);
+        return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+    }
+
+    /**
+     * Draws a picture in duotone: its luminance is stretched (so dark or washed-out pictures stay readable),
+     * then the shadows get the dark color and the highlights the light one.
+     */
+    function drawDuotone(canvas, image, dark, light) {
+        const width = Math.min(image.naturalWidth, GENRE_IMAGE_WIDTH);
+        const height = Math.round(image.naturalHeight * width / image.naturalWidth);
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext('2d');
+        context.drawImage(image, 0, 0, width, height);
+
+        const imageData = context.getImageData(0, 0, width, height);
+        const pixels = imageData.data;
+        const pixelCount = pixels.length / 4;
+        const luminances = new Uint8Array(pixelCount);
+        const histogram = new Uint32Array(256);
+        for (let i = 0; i < pixelCount; i++) {
+            const luminance = Math.round(0.2126 * pixels[i * 4] + 0.7152 * pixels[i * 4 + 1] + 0.0722 * pixels[i * 4 + 2]);
+            luminances[i] = luminance;
+            histogram[luminance]++;
+        }
+
+        // Black and white points ignoring the 2% darkest and brightest pixels
+        const percentile = function (ratio) {
+            let count = 0;
+            for (let value = 0; value < 256; value++) {
+                count += histogram[value];
+                if (count >= pixelCount * ratio) {
+                    return value;
+                }
+            }
+            return 255;
+        };
+        const black = percentile(0.02);
+        const white = Math.max(percentile(0.98), black + 32);
+
+        // Gamma moving the average luminance to the middle of the duotone
+        let sum = 0;
+        for (let value = 0; value < 256; value++) {
+            sum += histogram[value] * Math.min(Math.max((value - black) / (white - black), 0), 1);
+        }
+        const average = Math.min(Math.max(sum / pixelCount, 0.05), 0.95);
+        const gamma = Math.min(Math.max(Math.log(GENRE_IMAGE_TARGET_LUMINANCE) / Math.log(average), 0.4), 2.5);
+
+        const palette = new Uint8ClampedArray(256 * 3);
+        for (let value = 0; value < 256; value++) {
+            const t = Math.pow(Math.min(Math.max((value - black) / (white - black), 0), 1), gamma);
+            for (let channel = 0; channel < 3; channel++) {
+                palette[value * 3 + channel] = dark[channel] + (light[channel] - dark[channel]) * t;
+            }
+        }
+
+        for (let i = 0; i < pixelCount; i++) {
+            const offset = luminances[i] * 3;
+            pixels[i * 4] = palette[offset];
+            pixels[i * 4 + 1] = palette[offset + 1];
+            pixels[i * 4 + 2] = palette[offset + 2];
+        }
+        context.putImageData(imageData, 0, 0);
+    }
+
+    let genreImageObserver;
+
+    /** Draws the genre pictures of a section when they become visible. */
+    function drawGenreImages(itemsContainer) {
+        if (!genreImageObserver) {
+            genreImageObserver = new IntersectionObserver(function (entries) {
+                entries.forEach(function (entry) {
+                    if (!entry.isIntersecting) {
+                        return;
+                    }
+                    const canvas = entry.target;
+                    genreImageObserver.unobserve(canvas);
+
+                    const tone = canvas.getAttribute('data-tone').split(',');
+                    const image = new Image();
+                    image.onload = function () {
+                        try {
+                            drawDuotone(canvas, image, hexToRgb(tone[0]), hexToRgb(tone[1]));
+                            canvas.classList.add('bhs-genreImage-ready');
+                        } catch (error) {
+                            console.error(LOG_PREFIX, 'Failed to draw a genre picture', error);
+                        }
+                    };
+                    image.src = canvas.getAttribute('data-src');
+                });
+            }, { rootMargin: '0px 400px' });
+        }
+
+        itemsContainer.querySelectorAll('canvas.bhs-genreImage-picture:not(.bhs-genreImage-ready)').forEach(function (canvas) {
+            genreImageObserver.observe(canvas);
+        });
     }
 
     /** Genre and studio cards, rendered like the ones of the genres and studios pages of Jellyfin. */
@@ -926,6 +1034,11 @@
             return type.render(items, section, ctx);
         };
         itemsContainer.parentContainer = element;
+        if (type.afterRender) {
+            itemsContainer.afterRefresh = function () {
+                type.afterRender(itemsContainer);
+            };
+        }
     }
 
     function renderSections(elem, apiClient, user, userSettings, settings, t) {

@@ -6,7 +6,7 @@
 
 /*
  * Better Home Sections - image of the genre cards, inspired by Seerr: a random item of the genre drawn in duotone
- * (shadows in the dark color, highlights in the light one) with the name of the genre on it.
+ * (see drawDuotone) with the name of the genre on it.
  * The rest of the cards is rendered by the web client, the selectors are more specific than its card styles.
  */
 
@@ -15,34 +15,28 @@
     align-items: center;
     justify-content: center;
     overflow: hidden;
-    isolation: isolate;
     container-type: inline-size;
-    background-color: var(--bhs-tone-light);
+    background-color: var(--bhs-tone-dark);
+    background-image: linear-gradient(135deg, var(--bhs-tone-dark), var(--bhs-tone-light));
     color: #fff;
 }
 
-.card .cardImageContainer.bhs-genreImage-empty {
-    background-image: linear-gradient(135deg, var(--bhs-tone-dark), var(--bhs-tone-light));
-}
-
 .bhs-genreImage-picture,
-.bhs-genreImage-tint,
 .bhs-genreImage-overlay {
     position: absolute;
     inset: 0;
-    background-position: center;
-    background-repeat: no-repeat;
-    background-size: cover;
+    width: 100%;
+    height: 100%;
 }
 
 .bhs-genreImage-picture {
-    filter: grayscale(1) contrast(1.1);
-    mix-blend-mode: multiply;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
 }
 
-.bhs-genreImage-tint {
-    background-color: var(--bhs-tone-dark);
-    mix-blend-mode: lighten;
+.bhs-genreImage-picture.bhs-genreImage-ready {
+    opacity: 1;
 }
 
 .bhs-genreImage-overlay {
