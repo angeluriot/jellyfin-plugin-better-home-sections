@@ -1,11 +1,24 @@
 /**
  * Better Home Sections - configuration page.
- * Edits the plugin configuration (language, test commit and sections) with the built-in plugin configuration API.
+ * Edits the plugin configuration (language, test commit, sections and studios) with the built-in plugin configuration API.
  */
 
 const PLUGIN_ID = '80baa139-52ad-44e9-8d33-a45544c4a962';
 
 const VIEW_MODES = ['Portrait', 'Landscape'];
+
+const TABS = ['General', 'Sections', 'Studios'];
+
+// The select of the new section has its label outside, so it is aligned with the button next to it
+const STYLE = '<style>'
+    + '.bhsAddRow .selectLabel{display:none}'
+    + '.bhsAddRow .selectArrowContainer{top:0;bottom:0;display:flex;align-items:center}.bhsAddRow .selectArrow{margin:0}'
+    + '.bhsTabs{display:flex;flex-wrap:wrap;margin:0.5em 0 1.5em;border-bottom:1px solid var(--jf-palette-divider,rgba(255,255,255,.12))}'
+    + '.bhsTab{background:none;border:0;border-bottom:2px solid transparent;color:inherit;cursor:pointer;font:inherit;opacity:.7;padding:.8em 1.2em}'
+    + '.bhsTab-active{border-bottom-color:var(--jf-palette-primary-main,#00a4dc);opacity:1}'
+    + '.bhsStudios .checkboxContainer{margin-bottom:.6em}'
+    + '.bhsStudioCount{opacity:.6}'
+    + '</style>';
 
 function escapeHtml(value) {
     return String(value == null ? '' : value)
@@ -42,10 +55,13 @@ class ConfigPage {
         this.categoryCache = {};
         this.loadedCategories = {};
         this.editingId = null;
+        this.activeTab = 'Sections';
+        this.studiosPromise = null;
         this.t = null;
 
         this.root.addEventListener('click', this.onClick.bind(this));
         this.root.addEventListener('change', this.onChange.bind(this));
+        this.root.addEventListener('input', this.onInput.bind(this));
         this.root.addEventListener('submit', this.onSubmit.bind(this));
     }
 
@@ -91,13 +107,46 @@ class ConfigPage {
         return this.categoryCache[key];
     }
 
-    /** Options of the item select of a section (genres, studios or collections). */
+    /** Options of the item select of a section (genres, included studios or collections). */
     getItemOptions(section) {
         const kind = this.bhs.sectionTypes[section.Type].item;
         if (kind === 'Collection') {
             return Promise.resolve(this.collections);
         }
-        return this.loadCategories(kind, section.LibraryId);
+        return this.loadCategories(kind, section.LibraryId).then((items) => {
+            if (kind !== 'Studio') {
+                return items;
+            }
+            return items.filter((item) => {
+                return item.Id === section.ItemId || this.config.ExcludedStudios.indexOf(item.Id) === -1;
+            });
+        });
+    }
+
+    /** The studios / networks of all libraries having movies or series, those with the most first, cached. */
+    loadStudios() {
+        if (!this.studiosPromise) {
+            const itemTypes = this.bhs.getItemTypes(null);
+            this.studiosPromise = this.apiClient.getJSON(this.apiClient.getUrl('Studios', {
+                UserId: this.apiClient.getCurrentUserId(),
+                IncludeItemTypes: itemTypes,
+                EnableImages: false,
+                EnableTotalRecordCount: false
+            })).then((result) => {
+                return (result.Items || []).map((studio) => {
+                    return { Id: studio.Id, Name: studio.Name, Count: this.bhs.getContentCount(studio, itemTypes) };
+                }).filter(function (studio) {
+                    return studio.Count > 0;
+                }).sort(function (a, b) {
+                    return b.Count - a.Count || a.Name.localeCompare(b.Name);
+                });
+            }).catch((error) => {
+                console.error('[BetterHomeSections]', error);
+                this.studiosPromise = null;
+                return [];
+            });
+        }
+        return this.studiosPromise;
     }
 
     /** Loads the items referenced by the sections, so their names can be displayed. */
@@ -142,22 +191,23 @@ class ConfigPage {
             return { value: type, label: t('Type' + type) };
         });
 
-        // The select of the new section has its label outside, so it is aligned with the button next to it
-        this.root.innerHTML = '<style>.bhsAddRow .selectLabel{display:none}'
-            + '.bhsAddRow .selectArrowContainer{top:0;bottom:0;display:flex;align-items:center}.bhsAddRow .selectArrow{margin:0}</style>'
+        const tabs = TABS.map((tab) => {
+            return '<button type="button" class="bhsTab' + (tab === this.activeTab ? ' bhsTab-active' : '') + '" data-action="tab" data-tab="' + tab + '">'
+                + escapeHtml(t('ConfigTab' + tab)) + '</button>';
+        }).join('');
+
+        this.root.innerHTML = STYLE
             + '<form class="bhsForm">'
-            + '<div class="verticalSection">'
             + '<div class="sectionTitleContainer flex align-items-center"><h2 class="sectionTitle">Better Home Sections</h2></div>'
             + (this.isScriptMissing ? '<p class="fieldDescription" style="color:#e57373">' + escapeHtml(t('ConfigMissingDependency')) + '</p>' : '')
-            + '<h3>' + escapeHtml(t('ConfigGeneral')) + '</h3>'
+            + '<div class="bhsTabs">' + tabs + '</div>'
+            + this.panelHtml('General', ''
             + '<div class="selectContainer"><select is="emby-select" data-field="Language" label="' + escapeHtml(t('ConfigLanguage')) + '">'
             + optionsHtml(languageOptions, this.config.Language) + '</select></div>'
             + '<div class="inputContainer"><input is="emby-input" type="text" data-field="CommitHash" maxlength="40" autocomplete="off" label="'
             + escapeHtml(t('ConfigCommitHash')) + '" value="' + escapeHtml(this.config.CommitHash) + '" />'
-            + '<div class="fieldDescription">' + escapeHtml(t('ConfigCommitHashHelp')) + '</div></div>'
-            + '</div>'
-            + '<div class="verticalSection">'
-            + '<h3>' + escapeHtml(t('ConfigSections')) + '</h3>'
+            + '<div class="fieldDescription">' + escapeHtml(t('ConfigCommitHashHelp')) + '</div></div>')
+            + this.panelHtml('Sections', ''
             + '<p class="fieldDescription">' + escapeHtml(t('ConfigSectionsHelp')) + '</p>'
             + '<div class="paperList bhsSections">' + this.renderSections() + '</div>'
             + '<label class="selectLabel" for="bhsNewType" style="display:block;margin-top:1.5em">' + escapeHtml(t('ConfigSectionType')) + '</label>'
@@ -165,12 +215,72 @@ class ConfigPage {
             + '<div class="selectContainer flex-grow" style="margin:0"><select is="emby-select" id="bhsNewType" class="bhsNewType">'
             + optionsHtml(typeOptions) + '</select></div>'
             + '<button is="emby-button" type="button" class="raised" data-action="add" style="margin:0;padding-top:0;padding-bottom:0"><span>' + escapeHtml(t('ConfigAddSection')) + '</span></button>'
+            + '</div>')
+            + this.panelHtml('Studios', ''
+            + '<p class="fieldDescription">' + escapeHtml(t('ConfigStudiosHelp')) + '</p>'
+            + '<div class="inputContainer"><input is="emby-input" type="search" class="bhsStudioSearch" autocomplete="off" label="'
+            + escapeHtml(t('ConfigSearch')) + '" /></div>'
+            + '<div class="flex" style="gap:1em;margin-bottom:1.5em">'
+            + '<button is="emby-button" type="button" class="raised" data-action="includeStudios" style="margin:0"><span>' + escapeHtml(t('ConfigIncludeAll')) + '</span></button>'
+            + '<button is="emby-button" type="button" class="raised" data-action="excludeStudios" style="margin:0"><span>' + escapeHtml(t('ConfigExcludeAll')) + '</span></button>'
             + '</div>'
-            + '</div>'
+            + '<div class="bhsStudios"></div>')
             + '<button is="emby-button" type="submit" class="raised button-submit block" style="margin-top:2em"><span>' + escapeHtml(t('ConfigSave')) + '</span></button>'
             + '</form>';
 
         this.renderEditor();
+        if (this.activeTab === 'Studios') {
+            this.renderStudios();
+        }
+    }
+
+    panelHtml(tab, content) {
+        return '<div class="bhsPanel' + (tab === this.activeTab ? '' : ' hide') + '" data-tab="' + tab + '">' + content + '</div>';
+    }
+
+    /** The list of studios / networks with a checkbox to include or exclude each of them. */
+    renderStudios() {
+        const container = this.root.querySelector('.bhsStudios');
+        return this.loadStudios().then((studios) => {
+            if (!studios.length) {
+                container.innerHTML = '<p class="fieldDescription">' + escapeHtml(this.t('ConfigNoStudios')) + '</p>';
+                return;
+            }
+            container.innerHTML = studios.map((studio) => {
+                const checked = this.config.ExcludedStudios.indexOf(studio.Id) === -1 ? ' checked' : '';
+                return '<label class="checkboxContainer" data-name="' + escapeHtml(studio.Name.toLowerCase()) + '">'
+                    + '<input is="emby-checkbox" type="checkbox" data-studio="' + escapeHtml(studio.Id) + '"' + checked + ' />'
+                    + '<span>' + escapeHtml(studio.Name) + ' <span class="bhsStudioCount">· ' + studio.Count + '</span></span>'
+                    + '</label>';
+            }).join('');
+            this.filterStudios();
+        });
+    }
+
+    /** Hides the studios not matching the search. */
+    filterStudios() {
+        const search = (this.root.querySelector('.bhsStudioSearch').value || '').trim().toLowerCase();
+        this.root.querySelectorAll('.bhsStudios .checkboxContainer').forEach(function (row) {
+            row.classList.toggle('hide', search !== '' && row.getAttribute('data-name').indexOf(search) === -1);
+        });
+    }
+
+    /** Includes or excludes all the studios matching the search. */
+    setStudiosIncluded(isIncluded) {
+        this.root.querySelectorAll('.bhsStudios .checkboxContainer:not(.hide) input[data-studio]').forEach((checkbox) => {
+            checkbox.checked = isIncluded;
+            this.setStudioIncluded(checkbox.getAttribute('data-studio'), isIncluded);
+        });
+    }
+
+    setStudioIncluded(id, isIncluded) {
+        const excluded = this.config.ExcludedStudios;
+        const index = excluded.indexOf(id);
+        if (isIncluded && index !== -1) {
+            excluded.splice(index, 1);
+        } else if (!isIncluded && index === -1) {
+            excluded.push(id);
+        }
     }
 
     renderSections() {
@@ -285,6 +395,28 @@ class ConfigPage {
         }
 
         const action = button.getAttribute('data-action');
+
+        switch (action) {
+            case 'tab':
+                this.activeTab = button.getAttribute('data-tab');
+                this.root.querySelectorAll('.bhsTab').forEach((tab) => {
+                    tab.classList.toggle('bhsTab-active', tab === button);
+                });
+                this.root.querySelectorAll('.bhsPanel').forEach((panel) => {
+                    panel.classList.toggle('hide', panel.getAttribute('data-tab') !== this.activeTab);
+                });
+                if (this.activeTab === 'Studios') {
+                    this.renderStudios();
+                }
+                return;
+            case 'includeStudios':
+            case 'excludeStudios':
+                this.setStudiosIncluded(action === 'includeStudios');
+                return;
+            default:
+                break;
+        }
+
         const row = button.closest('.bhsSection');
         const sections = this.config.Sections;
         const index = row ? sections.findIndex(function (section) {
@@ -338,7 +470,19 @@ class ConfigPage {
         this.refreshSections();
     }
 
+    onInput(event) {
+        if (event.target.classList.contains('bhsStudioSearch')) {
+            this.filterStudios();
+        }
+    }
+
     onChange(event) {
+        const studioId = event.target.getAttribute('data-studio');
+        if (studioId) {
+            this.setStudioIncluded(studioId, event.target.checked);
+            return;
+        }
+
         const field = event.target.getAttribute('data-field');
         if (!field) {
             return;
@@ -415,6 +559,7 @@ export function init(view, settings, options) {
         });
 
         const config = results[0];
+        config.ExcludedStudios = config.ExcludedStudios || [];
         if (!config.Language) {
             // Not chosen yet: the language of the Jellyfin interface if available, English otherwise
             config.Language = window.BetterHomeSections.resolveLanguage(settings);

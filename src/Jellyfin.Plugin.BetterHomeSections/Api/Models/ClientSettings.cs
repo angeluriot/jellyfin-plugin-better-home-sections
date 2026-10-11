@@ -26,6 +26,11 @@ public class ClientSettings
     /// Gets or sets the visible sections, in order.
     /// </summary>
     public IReadOnlyList<ClientSection> Sections { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the identifiers of the studios / networks hidden from the sections.
+    /// </summary>
+    public IReadOnlyList<string> ExcludedStudios { get; set; } = [];
 }
 
 /// <summary>

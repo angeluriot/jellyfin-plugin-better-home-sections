@@ -601,7 +601,7 @@
     // --------------------------------------------------------------- tile data
 
     /** Genres or studios of the section having content for the user, in the section order. */
-    function fetchCategories(section, ctx, path, imageTypes) {
+    function fetchCategories(section, ctx, path, imageTypes, isIncluded) {
         const itemTypes = getItemTypes(section.Library);
 
         return getJson(ctx, path, {
@@ -615,7 +615,7 @@
         }).then(function (result) {
             const categories = toItems(result).filter(function (category) {
                 category.ContentCount = getContentCount(category, itemTypes);
-                return category.ContentCount > 0;
+                return category.ContentCount > 0 && (!isIncluded || isIncluded(category));
             });
             return sortByOrder(categories, section.Order).slice(0, TILE_LIMIT);
         });
@@ -701,8 +701,11 @@
         });
     }
 
+    /** Studios / networks of the section, without the ones excluded in the settings. */
     function fetchStudios(section, ctx) {
-        return fetchCategories(section, ctx, 'Studios', IMAGE_TYPES);
+        return fetchCategories(section, ctx, 'Studios', IMAGE_TYPES, function (studio) {
+            return ctx.excludedStudios.indexOf(studio.Id) === -1;
+        });
     }
 
     // --------------------------------------------------------------- rendering
@@ -1051,6 +1054,7 @@
             serverId: apiClient.serverId(),
             userSettings: userSettings || {},
             t: t,
+            excludedStudios: settings.ExcludedStudios || [],
             userViews: []
         };
 
@@ -1119,6 +1123,7 @@
         loadTranslator: loadTranslator,
         getSectionTitle: getSectionTitle,
         getItemTypes: getItemTypes,
-        isMusicLibrary: isMusicLibrary
+        isMusicLibrary: isMusicLibrary,
+        getContentCount: getContentCount
     };
 })();

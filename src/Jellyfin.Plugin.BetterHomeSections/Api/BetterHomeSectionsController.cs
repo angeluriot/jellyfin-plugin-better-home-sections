@@ -91,7 +91,8 @@ public class BetterHomeSectionsController : ControllerBase
                 .Where(section => section.Visible)
                 .Select(ToClientSection)
                 .OfType<ClientSection>()
-                .ToArray()
+                .ToArray(),
+            ExcludedStudios = configuration.ExcludedStudios
         };
     }
 

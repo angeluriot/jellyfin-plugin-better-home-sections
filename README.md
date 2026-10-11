@@ -24,11 +24,12 @@ A **Jellyfin** plugin that replaces the home screen sections with sections confi
 
 ## Configuration
 
-Open **Dashboard > Plugins > Better Home Sections** (also in the dashboard menu).
+Open **Dashboard > Plugins > Better Home Sections** (also in the dashboard menu). The settings are split in three tabs:
 
 * **Language**: the language of the section titles, French by default if the Jellyfin interface is in French, English otherwise
 * **Commit hash**: see [Testing changes](#testing-changes), leave empty otherwise
 * **Sections**: add, edit (click a section), hide, reorder and remove the sections displayed on the home screen, in order
+* **Studios / networks**: uncheck the studios / networks you don't want in the "Studios / networks" sections and in the choices of the "Studio / network" sections (like production companies), sorted by number of movies and series
 
 Each section has a view mode (portrait or landscape), an order, a visibility toggle and an optional custom title. Depending on its type, it can also be limited to a library (or all of them), and be about a genre, a studio / network or a collection.
 

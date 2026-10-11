@@ -27,4 +27,9 @@ public class PluginConfiguration : BasePluginConfiguration
         new() { Type = SectionType.NextUp, ViewMode = SectionViewMode.Landscape },
         new() { Type = SectionType.RecentlyAdded, ViewMode = SectionViewMode.Portrait, Order = SectionOrder.LastAdded }
     ];
+
+    /// <summary>
+    /// Gets or sets the identifiers of the studios / networks hidden from the sections.
+    /// </summary>
+    public string[] ExcludedStudios { get; set; } = [];
 }
