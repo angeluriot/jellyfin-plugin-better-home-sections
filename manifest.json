@@ -8,6 +8,14 @@
         "category": "General",
         "versions": [
             {
+                "version": "1.0.4.0",
+                "changelog": "Genres tab in the settings to hide genres and choose the color and media of their picture, eye toggles to show or hide genres and studios / networks.",
+                "targetAbi": "12.1.0.0",
+                "sourceUrl": "https://github.com/angeluriot/jellyfin-plugin-better-home-sections/releases/download/v1.0.4.0/better-home-sections_1.0.4.0.zip",
+                "checksum": "33a4eb3907b0650412900b19977a5e11",
+                "timestamp": "2026-10-14T09:29:31Z"
+            },
+            {
                 "version": "1.0.3.0",
                 "changelog": "Studios / networks tab in the settings to include or exclude each studio / network, readable genre pictures, settings split in tabs.",
                 "targetAbi": "12.1.0.0",
