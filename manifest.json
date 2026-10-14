@@ -8,6 +8,14 @@
         "category": "General",
         "versions": [
             {
+                "version": "1.0.6.0",
+                "changelog": "Number of items setting for each section (large values display everything).",
+                "targetAbi": "12.1.0.0",
+                "sourceUrl": "https://github.com/angeluriot/jellyfin-plugin-better-home-sections/releases/download/v1.0.6.0/better-home-sections_1.0.6.0.zip",
+                "checksum": "4f5ff0da6a8f68a2b4d50bcfd441622b",
+                "timestamp": "2026-10-14T14:45:54Z"
+            },
+            {
                 "version": "1.0.5.0",
                 "changelog": "Genre settings show the name of the chosen media, and the preview uses a random media when none is chosen.",
                 "targetAbi": "12.1.0.0",
