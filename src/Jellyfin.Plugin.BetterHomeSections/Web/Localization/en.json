@@ -53,6 +53,8 @@
     "ConfigSelect": "Select...",
     "ConfigViewMode": "View mode",
     "ConfigOrder": "Order",
+    "ConfigLimit": "Number of items",
+    "ConfigLimitHelp": "{limit} by default. Enter a large number to display everything.",
     "ConfigTitle": "Custom title",
     "ConfigTitleHelp": "Optional, replaces the generated title.",
     "ConfigHidden": "Hidden",

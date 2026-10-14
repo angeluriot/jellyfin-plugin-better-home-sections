@@ -102,6 +102,11 @@ public class SectionConfiguration
     public SectionOrder Order { get; set; }
 
     /// <summary>
+    /// Gets or sets the number of items displayed, 0 for the default of the section type.
+    /// </summary>
+    public int Limit { get; set; }
+
+    /// <summary>
     /// Gets or sets a value indicating whether the section is displayed on the home screen.
     /// </summary>
     public bool Visible { get; set; } = true;

@@ -115,6 +115,7 @@ public class BetterHomeSectionsController : ControllerBase
             Type = section.Type,
             ViewMode = section.ViewMode,
             Order = section.Order,
+            Limit = section.Limit,
             Title = section.Title.Trim()
         };
 

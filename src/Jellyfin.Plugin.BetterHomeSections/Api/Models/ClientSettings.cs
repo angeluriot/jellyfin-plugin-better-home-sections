@@ -85,6 +85,11 @@ public class ClientSection
     public SectionOrder Order { get; set; }
 
     /// <summary>
+    /// Gets or sets the number of items displayed, 0 for the default of the section type.
+    /// </summary>
+    public int Limit { get; set; }
+
+    /// <summary>
     /// Gets or sets the custom title, empty to use the generated one.
     /// </summary>
     public string Title { get; set; } = string.Empty;

@@ -424,6 +424,10 @@ class ConfigPage {
                 }), section.Order);
             }
 
+            html += '<div class="inputContainer"><input is="emby-input" type="number" min="1" step="1" data-field="Limit" label="'
+                + escapeHtml(t('ConfigLimit')) + '" value="' + (section.Limit > 0 ? section.Limit : type.limit) + '" />'
+                + '<div class="fieldDescription">' + escapeHtml(t('ConfigLimitHelp', { limit: type.limit })) + '</div></div>';
+
             html += '<div class="inputContainer"><input is="emby-input" type="text" data-field="Title" label="' + escapeHtml(t('ConfigTitle'))
                 + '" value="' + escapeHtml(section.Title) + '" />'
                 + '<div class="fieldDescription">' + escapeHtml(t('ConfigTitleHelp')) + '</div></div>';
@@ -605,6 +609,7 @@ class ConfigPage {
                     ViewMode: definition.viewMode,
                     Order: definition.orders[0],
                     Visible: true,
+                    Limit: 0,
                     Title: ''
                 };
                 sections.push(section);
@@ -670,7 +675,13 @@ class ConfigPage {
         }
 
         const section = this.findSection(row.getAttribute('data-id'));
-        section[field] = event.target.value;
+        if (field === 'Limit') {
+            // Empty or invalid for the default, and kept in the range of the server integers
+            const limit = parseInt(event.target.value, 10);
+            section.Limit = limit > 0 ? Math.min(limit, 1000000) : 0;
+        } else {
+            section[field] = event.target.value;
+        }
         if (field === 'LibraryId') {
             // The genres and studios depend on the library
             section.ItemId = '';

@@ -34,7 +34,7 @@ Open **Dashboard > Plugins > Better Home Sections** (also in the dashboard menu)
 
 The genres and studios / networks are sorted by number of movies and series.
 
-Each section has a view mode (portrait or landscape), an order, a visibility toggle and an optional custom title. Depending on its type, it can also be limited to a library (or all of them), and be about a genre, a studio / network or a collection.
+Each section has a view mode (portrait or landscape), an order, a number of items (a large number displays everything), a visibility toggle and an optional custom title. Depending on its type, it can also be limited to a library (or all of them), and be about a genre, a studio / network or a collection.
 
 Except Continue Watching, Next Up and Favorites, the sections only contain movies and series (never seasons or episodes), and "Most items first" only counts the movies and series.
 

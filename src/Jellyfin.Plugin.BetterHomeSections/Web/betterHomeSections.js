@@ -14,14 +14,20 @@
 
     const LOG_PREFIX = '[BetterHomeSections]';
 
-    /** Maximum number of items displayed in a section of cards. */
+    /** Default number of items displayed in a section of cards. */
     const ITEM_LIMIT = 20;
 
-    /** Maximum number of tiles displayed in a genres or studios section. */
+    /** Default number of genres or studios displayed in a genres or studios section. */
     const TILE_LIMIT = 40;
 
-    /** Number of random items fetched to illustrate the genre tiles. */
+    /** Maximum number of items of a section, high enough to mean "all of them". */
+    const MAX_LIMIT = 1000000;
+
+    /** Minimum number of random items fetched to illustrate the genres (10 per genre otherwise). */
     const GENRE_IMAGE_SAMPLE_SIZE = 300;
+
+    /** Number of genres missing from the sample whose picture is fetched at the same time. */
+    const GENRE_IMAGE_BATCH_SIZE = 10;
 
     /** Maximum width of the genre pictures, in pixels. */
     const GENRE_IMAGE_WIDTH = 480;
@@ -90,6 +96,7 @@
             orders: ['Default'],
             viewMode: 'Landscape',
             monitor: 'videoplayback,markplayed',
+            limit: 12,
             fetch: fetchContinueWatching,
             render: renderCards
         },
@@ -99,6 +106,7 @@
             orders: ['LastAdded'],
             viewMode: 'Portrait',
             monitor: 'markplayed',
+            limit: ITEM_LIMIT,
             fetch: fetchRecentlyAdded,
             render: renderCards
         },
@@ -107,6 +115,7 @@
             usesLibrary: true,
             orders: ['MostItems', 'Random'],
             viewMode: 'Landscape',
+            limit: TILE_LIMIT,
             fetch: fetchGenreTiles,
             render: renderCategories,
             afterRender: drawGenreImages
@@ -118,6 +127,7 @@
             orders: ['LastAdded', 'Random'],
             viewMode: 'Portrait',
             monitor: 'markplayed',
+            limit: ITEM_LIMIT,
             fetch: fetchGenreItems,
             render: renderCards
         },
@@ -126,6 +136,7 @@
             usesLibrary: true,
             orders: ['MostItems', 'Random'],
             viewMode: 'Landscape',
+            limit: TILE_LIMIT,
             fetch: fetchStudios,
             render: renderCategories
         },
@@ -136,6 +147,7 @@
             orders: ['LastAdded', 'Random'],
             viewMode: 'Portrait',
             monitor: 'markplayed',
+            limit: ITEM_LIMIT,
             fetch: fetchStudioItems,
             render: renderCards
         },
@@ -143,6 +155,7 @@
             icon: 'video_library',
             orders: ['MostItems', 'LastAdded', 'Random'],
             viewMode: 'Landscape',
+            limit: ITEM_LIMIT,
             fetch: fetchCollections,
             render: renderCards
         },
@@ -152,6 +165,7 @@
             orders: ['LastAdded', 'Random'],
             viewMode: 'Portrait',
             monitor: 'markplayed',
+            limit: ITEM_LIMIT,
             fetch: fetchCollectionItems,
             render: renderCards
         },
@@ -160,6 +174,7 @@
             orders: ['Default'],
             viewMode: 'Landscape',
             monitor: 'markplayed',
+            limit: ITEM_LIMIT,
             fetch: fetchFavorites,
             render: renderCards
         },
@@ -168,6 +183,7 @@
             orders: ['Default'],
             viewMode: 'Landscape',
             monitor: 'videoplayback,markplayed',
+            limit: 24,
             fetch: fetchNextUp,
             render: renderCards
         }
@@ -218,6 +234,24 @@
 
     function isMusicLibrary(library) {
         return !!library && library.CollectionType === 'music';
+    }
+
+    /** Number of items displayed in a section: the one chosen in the settings, or the default of its type. */
+    function getLimit(section) {
+        const limit = section.Limit > 0 ? section.Limit : SECTION_TYPES[section.Type].limit;
+        return Math.min(limit, MAX_LIMIT);
+    }
+
+    /** Runs a function on the items of a list, a few at a time, so a long list does not flood the server. */
+    function runInBatches(list, size, run) {
+        let promise = Promise.resolve();
+        for (let i = 0; i < list.length; i += size) {
+            const batch = list.slice(i, i + size);
+            promise = promise.then(function () {
+                return Promise.all(batch.map(run));
+            });
+        }
+        return promise;
     }
 
     function getLibraryId(section) {
@@ -459,7 +493,7 @@
     function fetchContinueWatching(section, ctx) {
         return getJson(ctx, 'UserItems/Resume', {
             UserId: ctx.userId,
-            Limit: 12,
+            Limit: getLimit(section),
             Fields: 'PrimaryImageAspectRatio',
             ImageTypeLimit: 1,
             EnableImageTypes: IMAGE_TYPES,
@@ -476,7 +510,7 @@
 
         return getJson(ctx, 'Shows/NextUp', {
             UserId: ctx.userId,
-            Limit: 24,
+            Limit: getLimit(section),
             Fields: 'PrimaryImageAspectRatio,DateCreated,Path,MediaSourceCount',
             ImageTypeLimit: 1,
             EnableImageTypes: IMAGE_TYPES,
@@ -497,7 +531,8 @@
         return getJson(ctx, 'Items/Latest', {
             UserId: ctx.userId,
             ParentId: getLibraryId(section),
-            Limit: ITEM_LIMIT * 2,
+            // More items, as the episodes of the same series are merged
+            Limit: Math.min(getLimit(section) * 2, MAX_LIMIT),
             Fields: 'PrimaryImageAspectRatio,Path',
             ImageTypeLimit: 1,
             EnableImageTypes: IMAGE_TYPES
@@ -526,7 +561,7 @@
                     return itemsById[id];
                 }).filter(function (item) {
                     return item && itemTypes.indexOf(item.Type) !== -1;
-                }).slice(0, ITEM_LIMIT);
+                }).slice(0, getLimit(section));
             });
         });
     }
@@ -536,7 +571,7 @@
             ParentId: getLibraryId(section),
             GenreIds: section.Item.Id,
             IncludeItemTypes: getItemTypes(section.Library),
-            Limit: ITEM_LIMIT
+            Limit: getLimit(section)
         }, getSortParams(section.Order)));
     }
 
@@ -545,7 +580,7 @@
             ParentId: getLibraryId(section),
             StudioIds: section.Item.Id,
             IncludeItemTypes: getItemTypes(section.Library),
-            Limit: ITEM_LIMIT
+            Limit: getLimit(section)
         }, getSortParams(section.Order)));
     }
 
@@ -554,7 +589,7 @@
             ParentId: section.Item.Id,
             Recursive: false,
             IncludeItemTypes: ALL_ITEM_TYPES,
-            Limit: ITEM_LIMIT
+            Limit: getLimit(section)
         }, getSortParams(section.Order)));
     }
 
@@ -575,15 +610,15 @@
 
     function fetchCollections(section, ctx) {
         if (section.Order !== 'MostItems') {
-            return fetchItems(ctx, Object.assign({ IncludeItemTypes: 'BoxSet', Limit: ITEM_LIMIT }, getSortParams(section.Order)));
+            return fetchItems(ctx, Object.assign({ IncludeItemTypes: 'BoxSet', Limit: getLimit(section) }, getSortParams(section.Order)));
         }
 
         // There is no API sort by number of items, so all the collections are counted and sorted here
         return fetchItems(ctx, { IncludeItemTypes: 'BoxSet' }).then(function (collections) {
-            return Promise.all(collections.map(function (collection) {
+            return runInBatches(collections, GENRE_IMAGE_BATCH_SIZE, function (collection) {
                 return fetchCollectionContentCount(ctx, collection);
-            })).then(function () {
-                return sortByOrder(collections, section.Order).slice(0, ITEM_LIMIT);
+            }).then(function () {
+                return sortByOrder(collections, section.Order).slice(0, getLimit(section));
             });
         });
     }
@@ -594,7 +629,7 @@
             IncludeItemTypes: FAVORITE_ITEM_TYPES,
             SortBy: 'SortName',
             SortOrder: 'Ascending',
-            Limit: ITEM_LIMIT
+            Limit: getLimit(section)
         });
     }
 
@@ -617,7 +652,7 @@
                 category.ContentCount = getContentCount(category, itemTypes);
                 return category.ContentCount > 0 && (!isIncluded || isIncluded(category));
             });
-            return sortByOrder(categories, section.Order).slice(0, TILE_LIMIT);
+            return sortByOrder(categories, section.Order).slice(0, getLimit(section));
         });
     }
 
@@ -647,8 +682,12 @@
             EnableImageTypes: imageType
         };
         const picks = {};
+        if (!genres.length) {
+            return Promise.resolve(picks);
+        }
 
-        return fetchItems(ctx, Object.assign({ Fields: 'Genres', Limit: GENRE_IMAGE_SAMPLE_SIZE }, common)).then(function (sample) {
+        const sampleSize = Math.max(GENRE_IMAGE_SAMPLE_SIZE, genres.length * 10);
+        return fetchItems(ctx, Object.assign({ Fields: 'Genres', Limit: sampleSize }, common)).then(function (sample) {
             const used = {};
             genres.forEach(function (genre) {
                 const item = sample.find(function (candidate) {
@@ -666,13 +705,13 @@
             const missing = genres.filter(function (genre) {
                 return !picks[genre.Id];
             });
-            return Promise.all(missing.map(function (genre) {
+            return runInBatches(missing, GENRE_IMAGE_BATCH_SIZE, function (genre) {
                 return fetchItems(ctx, Object.assign({ GenreIds: genre.Id, Limit: 1 }, common)).then(function (items) {
                     if (items[0]) {
                         picks[genre.Id] = items[0];
                     }
                 });
-            }));
+            });
         }).then(function () {
             return picks;
         });
