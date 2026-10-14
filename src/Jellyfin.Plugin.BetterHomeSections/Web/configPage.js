@@ -64,6 +64,7 @@ class ConfigPage {
         this.loadedCategories = {};
         this.categoryLists = {};
         this.genreItems = {};
+        this.itemNames = {};
         this.editingId = null;
         this.editingGenreId = null;
         this.activeTab = 'Sections';
@@ -213,6 +214,30 @@ class ConfigPage {
         if (!setting.Color && !setting.ItemId) {
             genres.splice(genres.indexOf(setting), 1);
         }
+    }
+
+    /** Loads the names of the media chosen for the genres, so they can be displayed. */
+    loadChosenItemNames() {
+        const ids = this.config.Genres.map(function (genre) {
+            return genre.ItemId;
+        }).filter((id) => {
+            return id && !this.itemNames[id];
+        });
+        if (!ids.length) {
+            return Promise.resolve();
+        }
+        return this.apiClient.getJSON(this.apiClient.getUrl('Items', {
+            UserId: this.apiClient.getCurrentUserId(),
+            Ids: ids.join(','),
+            EnableImages: false,
+            EnableTotalRecordCount: false
+        })).then((result) => {
+            (result.Items || []).forEach((item) => {
+                this.itemNames[item.Id] = item.Name;
+            });
+        }).catch(function (error) {
+            console.error('[BetterHomeSections]', error);
+        });
     }
 
     /** Movies and series of a genre, that can illustrate it, cached. */
@@ -425,7 +450,8 @@ class ConfigPage {
         const container = this.root.querySelector('.bhsCategories[data-kind="' + kind + '"]');
         const isGenre = kind === 'Genres';
 
-        return this.loadCategoryList(kind).then((categories) => {
+        return Promise.all([this.loadCategoryList(kind), isGenre ? this.loadChosenItemNames() : null]).then((results) => {
+            const categories = results[0];
             if (!categories.length) {
                 container.innerHTML = '<p class="fieldDescription">' + escapeHtml(t('ConfigNo' + kind)) + '</p>';
                 return;
@@ -443,7 +469,7 @@ class ConfigPage {
                         : '<span class="bhsSwatch bhsSwatch-random"></span>';
                     details = '<div class="listItemBodyText secondary">' + escapeHtml(t('ConfigGenreDetails', {
                         color: setting.Color ? t('Color' + setting.Color) : t('ConfigRandom'),
-                        media: setting.ItemId ? t('ConfigCustomMedia') : t('ConfigRandom')
+                        media: setting.ItemId ? (this.itemNames[setting.ItemId] || '…') : t('ConfigRandom')
                     })) + '</div>';
                 }
 
@@ -494,9 +520,10 @@ class ConfigPage {
                 + '<div class="bhs-genrePreview"></div>';
             container.classList.remove('hide');
 
+            // Like on the home screen, a random media if none is chosen
             const item = items.find(function (candidate) {
                 return candidate.Id === setting.ItemId;
-            });
+            }) || items[Math.floor(Math.random() * items.length)];
             this.bhs.renderGenrePreview(container.querySelector('.bhs-genrePreview'), name.trim(), setting.Color, item || null);
         });
     }
