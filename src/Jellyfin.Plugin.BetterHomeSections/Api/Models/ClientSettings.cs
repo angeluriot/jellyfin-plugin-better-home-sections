@@ -28,6 +28,16 @@ public class ClientSettings
     public IReadOnlyList<ClientSection> Sections { get; set; } = [];
 
     /// <summary>
+    /// Gets or sets the identifiers of the genres hidden from the sections.
+    /// </summary>
+    public IReadOnlyList<string> ExcludedGenres { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the color and media chosen for the pictures of some genres.
+    /// </summary>
+    public IReadOnlyList<GenreConfiguration> Genres { get; set; } = [];
+
+    /// <summary>
     /// Gets or sets the identifiers of the studios / networks hidden from the sections.
     /// </summary>
     public IReadOnlyList<string> ExcludedStudios { get; set; } = [];

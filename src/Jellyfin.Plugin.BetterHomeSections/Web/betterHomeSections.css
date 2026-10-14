@@ -10,7 +10,8 @@
  * The rest of the cards is rendered by the web client, the selectors are more specific than its card styles.
  */
 
-.card .cardImageContainer.bhs-genreImage {
+.card .cardImageContainer.bhs-genreImage,
+.bhs-genrePreview.bhs-genreImage {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -19,6 +20,12 @@
     background-color: var(--bhs-tone-dark);
     background-image: linear-gradient(135deg, var(--bhs-tone-dark), var(--bhs-tone-light));
     color: #fff;
+}
+
+/* Preview in the settings page */
+.bhs-genrePreview.bhs-genreImage {
+    position: relative;
+    aspect-ratio: 16 / 9;
 }
 
 .bhs-genreImage-picture,
@@ -45,6 +52,7 @@
 }
 
 .card:hover .bhs-genreImage-overlay,
+.bhs-genrePreview:hover .bhs-genreImage-overlay,
 .card:focus-within .bhs-genreImage-overlay {
     background-color: rgba(31, 41, 55, 0.1);
 }

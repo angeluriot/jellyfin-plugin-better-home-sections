@@ -29,6 +29,16 @@ public class PluginConfiguration : BasePluginConfiguration
     ];
 
     /// <summary>
+    /// Gets or sets the identifiers of the genres hidden from the sections.
+    /// </summary>
+    public string[] ExcludedGenres { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the color and media chosen for the pictures of some genres.
+    /// </summary>
+    public GenreConfiguration[] Genres { get; set; } = [];
+
+    /// <summary>
     /// Gets or sets the identifiers of the studios / networks hidden from the sections.
     /// </summary>
     public string[] ExcludedStudios { get; set; } = [];

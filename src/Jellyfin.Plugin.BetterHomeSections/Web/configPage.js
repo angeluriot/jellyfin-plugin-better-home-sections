@@ -1,13 +1,19 @@
 /**
  * Better Home Sections - configuration page.
- * Edits the plugin configuration (language, test commit, sections and studios) with the built-in plugin configuration API.
+ * Edits the plugin configuration (language, test commit, sections, genres and studios) with the built-in plugin configuration API.
  */
 
 const PLUGIN_ID = '80baa139-52ad-44e9-8d33-a45544c4a962';
 
 const VIEW_MODES = ['Portrait', 'Landscape'];
 
-const TABS = ['General', 'Sections', 'Studios'];
+const TABS = ['General', 'Sections', 'Genres', 'Studios'];
+
+/** The lists of the genres and studios tabs, with the configuration field of their hidden entries. */
+const CATEGORIES = {
+    Genres: { path: 'Genres', excludedField: 'ExcludedGenres' },
+    Studios: { path: 'Studios', excludedField: 'ExcludedStudios' }
+};
 
 // The select of the new section has its label outside, so it is aligned with the button next to it
 const STYLE = '<style>'
@@ -16,8 +22,10 @@ const STYLE = '<style>'
     + '.bhsTabs{display:flex;flex-wrap:wrap;margin:0.5em 0 1.5em;border-bottom:1px solid var(--jf-palette-divider,rgba(255,255,255,.12))}'
     + '.bhsTab{background:none;border:0;border-bottom:2px solid transparent;color:inherit;cursor:pointer;font:inherit;opacity:.7;padding:.8em 1.2em}'
     + '.bhsTab-active{border-bottom-color:var(--jf-palette-primary-main,#00a4dc);opacity:1}'
-    + '.bhsStudios .checkboxContainer{margin-bottom:.6em}'
-    + '.bhsStudioCount{opacity:.6}'
+    + '.bhsCount{opacity:.6}'
+    + '.bhsSwatch{flex-shrink:0;width:2.2em;height:1.4em;margin:0 1em 0 .5em;border-radius:.2em}'
+    + '.bhsSwatch-random{background:conic-gradient(#991b1b,#d47c1d,#e4ed55,#21cb51,#01b4e4,#5b21b6,#9d174d,#991b1b)}'
+    + '.bhsGenreEditor .bhs-genrePreview{width:100%;max-width:24em;margin-bottom:1.5em;border-radius:.3em}'
     + '</style>';
 
 function escapeHtml(value) {
@@ -54,9 +62,11 @@ class ConfigPage {
         this.isScriptMissing = options.isScriptMissing;
         this.categoryCache = {};
         this.loadedCategories = {};
+        this.categoryLists = {};
+        this.genreItems = {};
         this.editingId = null;
+        this.editingGenreId = null;
         this.activeTab = 'Sections';
-        this.studiosPromise = null;
         this.t = null;
 
         this.root.addEventListener('click', this.onClick.bind(this));
@@ -107,46 +117,18 @@ class ConfigPage {
         return this.categoryCache[key];
     }
 
-    /** Options of the item select of a section (genres, included studios or collections). */
+    /** Options of the item select of a section (shown genres and studios, or collections). */
     getItemOptions(section) {
         const kind = this.bhs.sectionTypes[section.Type].item;
         if (kind === 'Collection') {
             return Promise.resolve(this.collections);
         }
-        return this.loadCategories(kind, section.LibraryId).then((items) => {
-            if (kind !== 'Studio') {
-                return items;
-            }
-            return items.filter((item) => {
-                return item.Id === section.ItemId || this.config.ExcludedStudios.indexOf(item.Id) === -1;
+        const excluded = this.config[CATEGORIES[kind + 's'].excludedField];
+        return this.loadCategories(kind, section.LibraryId).then(function (items) {
+            return items.filter(function (item) {
+                return item.Id === section.ItemId || excluded.indexOf(item.Id) === -1;
             });
         });
-    }
-
-    /** The studios / networks of all libraries having movies or series, those with the most first, cached. */
-    loadStudios() {
-        if (!this.studiosPromise) {
-            const itemTypes = this.bhs.getItemTypes(null);
-            this.studiosPromise = this.apiClient.getJSON(this.apiClient.getUrl('Studios', {
-                UserId: this.apiClient.getCurrentUserId(),
-                IncludeItemTypes: itemTypes,
-                EnableImages: false,
-                EnableTotalRecordCount: false
-            })).then((result) => {
-                return (result.Items || []).map((studio) => {
-                    return { Id: studio.Id, Name: studio.Name, Count: this.bhs.getContentCount(studio, itemTypes) };
-                }).filter(function (studio) {
-                    return studio.Count > 0;
-                }).sort(function (a, b) {
-                    return b.Count - a.Count || a.Name.localeCompare(b.Name);
-                });
-            }).catch((error) => {
-                console.error('[BetterHomeSections]', error);
-                this.studiosPromise = null;
-                return [];
-            });
-        }
-        return this.studiosPromise;
     }
 
     /** Loads the items referenced by the sections, so their names can be displayed. */
@@ -170,6 +152,94 @@ class ConfigPage {
         });
     }
 
+    /** The genres or studios of all libraries having movies or series, those with the most first, cached. */
+    loadCategoryList(kind) {
+        if (!this.categoryLists[kind]) {
+            const itemTypes = this.bhs.getItemTypes(null);
+            this.categoryLists[kind] = this.apiClient.getJSON(this.apiClient.getUrl(CATEGORIES[kind].path, {
+                UserId: this.apiClient.getCurrentUserId(),
+                IncludeItemTypes: itemTypes,
+                EnableImages: false,
+                EnableTotalRecordCount: false
+            })).then((result) => {
+                return (result.Items || []).map((category) => {
+                    return { Id: category.Id, Name: category.Name, Count: this.bhs.getContentCount(category, itemTypes) };
+                }).filter(function (category) {
+                    return category.Count > 0;
+                }).sort(function (a, b) {
+                    return b.Count - a.Count || a.Name.localeCompare(b.Name);
+                });
+            }).catch((error) => {
+                console.error('[BetterHomeSections]', error);
+                this.categoryLists[kind] = null;
+                return [];
+            });
+        }
+        return this.categoryLists[kind];
+    }
+
+    isExcluded(kind, id) {
+        return this.config[CATEGORIES[kind].excludedField].indexOf(id) !== -1;
+    }
+
+    setExcluded(kind, id, isExcluded) {
+        const excluded = this.config[CATEGORIES[kind].excludedField];
+        const index = excluded.indexOf(id);
+        if (isExcluded && index === -1) {
+            excluded.push(id);
+        } else if (!isExcluded && index !== -1) {
+            excluded.splice(index, 1);
+        }
+    }
+
+    /** The color and media chosen for a genre, empty for random. */
+    getGenreSetting(id) {
+        return this.config.Genres.find(function (genre) {
+            return genre.GenreId === id;
+        }) || { GenreId: id, Color: '', ItemId: '' };
+    }
+
+    setGenreSetting(id, field, value) {
+        const genres = this.config.Genres;
+        let setting = genres.find(function (genre) {
+            return genre.GenreId === id;
+        });
+        if (!setting) {
+            setting = { GenreId: id, Color: '', ItemId: '' };
+            genres.push(setting);
+        }
+        setting[field] = value;
+        // Only the customized genres are saved
+        if (!setting.Color && !setting.ItemId) {
+            genres.splice(genres.indexOf(setting), 1);
+        }
+    }
+
+    /** Movies and series of a genre, that can illustrate it, cached. */
+    loadGenreItems(id) {
+        if (!this.genreItems[id]) {
+            this.genreItems[id] = this.apiClient.getJSON(this.apiClient.getUrl('Items', {
+                UserId: this.apiClient.getCurrentUserId(),
+                GenreIds: id,
+                IncludeItemTypes: this.bhs.getItemTypes(null),
+                Recursive: true,
+                SortBy: 'SortName',
+                Fields: 'ProductionYear',
+                ImageTypeLimit: 1,
+                EnableImageTypes: 'Backdrop,Primary',
+                EnableTotalRecordCount: false
+            })).then(function (result) {
+                return (result.Items || []).filter(function (item) {
+                    return (item.BackdropImageTags && item.BackdropImageTags.length) || (item.ImageTags && item.ImageTags.Primary);
+                });
+            }).catch(function (error) {
+                console.error('[BetterHomeSections]', error);
+                return [];
+            });
+        }
+        return this.genreItems[id];
+    }
+
     // ------------------------------------------------------------- rendering
 
     getTitle(section) {
@@ -190,7 +260,6 @@ class ConfigPage {
         const typeOptions = Object.keys(this.bhs.sectionTypes).map(function (type) {
             return { value: type, label: t('Type' + type) };
         });
-
         const tabs = TABS.map((tab) => {
             return '<button type="button" class="bhsTab' + (tab === this.activeTab ? ' bhsTab-active' : '') + '" data-action="tab" data-tab="' + tab + '">'
                 + escapeHtml(t('ConfigTab' + tab)) + '</button>';
@@ -216,21 +285,14 @@ class ConfigPage {
             + optionsHtml(typeOptions) + '</select></div>'
             + '<button is="emby-button" type="button" class="raised" data-action="add" style="margin:0;padding-top:0;padding-bottom:0"><span>' + escapeHtml(t('ConfigAddSection')) + '</span></button>'
             + '</div>')
-            + this.panelHtml('Studios', ''
-            + '<p class="fieldDescription">' + escapeHtml(t('ConfigStudiosHelp')) + '</p>'
-            + '<div class="inputContainer"><input is="emby-input" type="search" class="bhsStudioSearch" autocomplete="off" label="'
-            + escapeHtml(t('ConfigSearch')) + '" /></div>'
-            + '<div class="flex" style="gap:1em;margin-bottom:1.5em">'
-            + '<button is="emby-button" type="button" class="raised" data-action="includeStudios" style="margin:0"><span>' + escapeHtml(t('ConfigIncludeAll')) + '</span></button>'
-            + '<button is="emby-button" type="button" class="raised" data-action="excludeStudios" style="margin:0"><span>' + escapeHtml(t('ConfigExcludeAll')) + '</span></button>'
-            + '</div>'
-            + '<div class="bhsStudios"></div>')
+            + this.categoryPanelHtml('Genres')
+            + this.categoryPanelHtml('Studios')
             + '<button is="emby-button" type="submit" class="raised button-submit block" style="margin-top:2em"><span>' + escapeHtml(t('ConfigSave')) + '</span></button>'
             + '</form>';
 
         this.renderEditor();
-        if (this.activeTab === 'Studios') {
-            this.renderStudios();
+        if (CATEGORIES[this.activeTab]) {
+            this.renderCategories(this.activeTab);
         }
     }
 
@@ -238,49 +300,20 @@ class ConfigPage {
         return '<div class="bhsPanel' + (tab === this.activeTab ? '' : ' hide') + '" data-tab="' + tab + '">' + content + '</div>';
     }
 
-    /** The list of studios / networks with a checkbox to include or exclude each of them. */
-    renderStudios() {
-        const container = this.root.querySelector('.bhsStudios');
-        return this.loadStudios().then((studios) => {
-            if (!studios.length) {
-                container.innerHTML = '<p class="fieldDescription">' + escapeHtml(this.t('ConfigNoStudios')) + '</p>';
-                return;
-            }
-            container.innerHTML = studios.map((studio) => {
-                const checked = this.config.ExcludedStudios.indexOf(studio.Id) === -1 ? ' checked' : '';
-                return '<label class="checkboxContainer" data-name="' + escapeHtml(studio.Name.toLowerCase()) + '">'
-                    + '<input is="emby-checkbox" type="checkbox" data-studio="' + escapeHtml(studio.Id) + '"' + checked + ' />'
-                    + '<span>' + escapeHtml(studio.Name) + ' <span class="bhsStudioCount">· ' + studio.Count + '</span></span>'
-                    + '</label>';
-            }).join('');
-            this.filterStudios();
-        });
-    }
-
-    /** Hides the studios not matching the search. */
-    filterStudios() {
-        const search = (this.root.querySelector('.bhsStudioSearch').value || '').trim().toLowerCase();
-        this.root.querySelectorAll('.bhsStudios .checkboxContainer').forEach(function (row) {
-            row.classList.toggle('hide', search !== '' && row.getAttribute('data-name').indexOf(search) === -1);
-        });
-    }
-
-    /** Includes or excludes all the studios matching the search. */
-    setStudiosIncluded(isIncluded) {
-        this.root.querySelectorAll('.bhsStudios .checkboxContainer:not(.hide) input[data-studio]').forEach((checkbox) => {
-            checkbox.checked = isIncluded;
-            this.setStudioIncluded(checkbox.getAttribute('data-studio'), isIncluded);
-        });
-    }
-
-    setStudioIncluded(id, isIncluded) {
-        const excluded = this.config.ExcludedStudios;
-        const index = excluded.indexOf(id);
-        if (isIncluded && index !== -1) {
-            excluded.splice(index, 1);
-        } else if (!isIncluded && index === -1) {
-            excluded.push(id);
-        }
+    /** The tab of the genres or studios: search, buttons to show or hide all of them, and their list. */
+    categoryPanelHtml(kind) {
+        const t = this.t;
+        return this.panelHtml(kind, ''
+            + '<p class="fieldDescription">' + escapeHtml(t('Config' + kind + 'Help')) + '</p>'
+            + '<div class="inputContainer"><input is="emby-input" type="search" class="bhsCategorySearch" data-kind="' + kind + '" autocomplete="off" label="'
+            + escapeHtml(t('ConfigSearch')) + '" /></div>'
+            + '<div class="flex" style="gap:1em;margin-bottom:1.5em">'
+            + '<button is="emby-button" type="button" class="raised" data-action="showCategories" data-kind="' + kind + '" style="margin:0"><span>'
+            + escapeHtml(t('ConfigShowAll')) + '</span></button>'
+            + '<button is="emby-button" type="button" class="raised" data-action="hideCategories" data-kind="' + kind + '" style="margin:0"><span>'
+            + escapeHtml(t('ConfigHideAll')) + '</span></button>'
+            + '</div>'
+            + '<div class="paperList bhsCategories" data-kind="' + kind + '"></div>');
     }
 
     renderSections() {
@@ -386,6 +419,96 @@ class ConfigPage {
         return this.renderEditor();
     }
 
+    /** The genres or studios with an eye to show or hide each of them, the genres can also be clicked to choose their picture. */
+    renderCategories(kind) {
+        const t = this.t;
+        const container = this.root.querySelector('.bhsCategories[data-kind="' + kind + '"]');
+        const isGenre = kind === 'Genres';
+
+        return this.loadCategoryList(kind).then((categories) => {
+            if (!categories.length) {
+                container.innerHTML = '<p class="fieldDescription">' + escapeHtml(t('ConfigNo' + kind)) + '</p>';
+                return;
+            }
+
+            container.innerHTML = categories.map((category) => {
+                const isExcluded = this.isExcluded(kind, category.Id);
+                let swatch = '';
+                let details = '';
+                if (isGenre) {
+                    const setting = this.getGenreSetting(category.Id);
+                    const tone = this.bhs.genreTones[setting.Color];
+                    swatch = tone
+                        ? '<span class="bhsSwatch" style="background:linear-gradient(135deg,#' + tone[0] + ',#' + tone[1] + ')"></span>'
+                        : '<span class="bhsSwatch bhsSwatch-random"></span>';
+                    details = '<div class="listItemBodyText secondary">' + escapeHtml(t('ConfigGenreDetails', {
+                        color: setting.Color ? t('Color' + setting.Color) : t('ConfigRandom'),
+                        media: setting.ItemId ? t('ConfigCustomMedia') : t('ConfigRandom')
+                    })) + '</div>';
+                }
+
+                return '<div class="bhsCategory listItem-border" data-kind="' + kind + '" data-id="' + escapeHtml(category.Id)
+                    + '" data-name="' + escapeHtml(category.Name.toLowerCase()) + '">'
+                    + '<div class="listItem"' + (isGenre ? ' data-action="editGenre"' : '') + ' style="' + (isGenre ? 'cursor:pointer;' : '')
+                    + (isExcluded ? 'opacity:.5' : '') + '">'
+                    + swatch
+                    + '<div class="listItemBody' + (isGenre ? ' two-line' : '') + '">'
+                    + '<div class="listItemBodyText">' + escapeHtml(category.Name) + ' <span class="bhsCount">· ' + category.Count + '</span></div>'
+                    + details
+                    + '</div>'
+                    + this.iconButton('toggleCategory', isExcluded ? 'visibility_off' : 'visibility', t(isExcluded ? 'ConfigShow' : 'ConfigHide'))
+                    + '</div>'
+                    + (isGenre ? '<div class="bhsGenreEditor hide" style="padding:1em 1em 0.5em"></div>' : '')
+                    + '</div>';
+            }).join('');
+
+            this.filterCategories(kind);
+            if (isGenre) {
+                this.renderGenreEditor();
+            }
+        });
+    }
+
+    /** Renders the color, media and preview of the genre being edited, under its row. */
+    renderGenreEditor() {
+        const id = this.editingGenreId;
+        const container = id ? this.root.querySelector('.bhsCategory[data-kind="Genres"][data-id="' + id + '"] .bhsGenreEditor') : null;
+        if (!container) {
+            this.editingGenreId = null;
+            return Promise.resolve();
+        }
+
+        const t = this.t;
+        return this.loadGenreItems(id).then((items) => {
+            const setting = this.getGenreSetting(id);
+            const colorOptions = [{ value: '', label: t('ConfigRandom') }].concat(Object.keys(this.bhs.genreTones).map(function (color) {
+                return { value: color, label: t('Color' + color) };
+            }));
+            const itemOptions = [{ value: '', label: t('ConfigRandom') }].concat(items.map(function (item) {
+                return { value: item.Id, label: item.Name + (item.ProductionYear ? ' (' + item.ProductionYear + ')' : '') };
+            }));
+            const name = container.closest('.bhsCategory').querySelector('.listItemBodyText').firstChild.textContent;
+
+            container.innerHTML = this.selectHtml('GenreColor', t('ConfigColor'), colorOptions, setting.Color)
+                + this.selectHtml('GenreItem', t('ConfigMedia'), itemOptions, setting.ItemId)
+                + '<div class="bhs-genrePreview"></div>';
+            container.classList.remove('hide');
+
+            const item = items.find(function (candidate) {
+                return candidate.Id === setting.ItemId;
+            });
+            this.bhs.renderGenrePreview(container.querySelector('.bhs-genrePreview'), name.trim(), setting.Color, item || null);
+        });
+    }
+
+    /** Hides the genres or studios not matching the search. */
+    filterCategories(kind) {
+        const search = (this.root.querySelector('.bhsCategorySearch[data-kind="' + kind + '"]').value || '').trim().toLowerCase();
+        this.root.querySelectorAll('.bhsCategory[data-kind="' + kind + '"]').forEach(function (row) {
+            row.classList.toggle('hide', search !== '' && row.getAttribute('data-name').indexOf(search) === -1);
+        });
+    }
+
     // ---------------------------------------------------------------- events
 
     onClick(event) {
@@ -395,6 +518,7 @@ class ConfigPage {
         }
 
         const action = button.getAttribute('data-action');
+        const category = button.closest('.bhsCategory');
 
         switch (action) {
             case 'tab':
@@ -405,14 +529,33 @@ class ConfigPage {
                 this.root.querySelectorAll('.bhsPanel').forEach((panel) => {
                     panel.classList.toggle('hide', panel.getAttribute('data-tab') !== this.activeTab);
                 });
-                if (this.activeTab === 'Studios') {
-                    this.renderStudios();
+                if (CATEGORIES[this.activeTab]) {
+                    this.renderCategories(this.activeTab);
                 }
                 return;
-            case 'includeStudios':
-            case 'excludeStudios':
-                this.setStudiosIncluded(action === 'includeStudios');
+            case 'toggleCategory': {
+                const kind = category.getAttribute('data-kind');
+                const id = category.getAttribute('data-id');
+                this.setExcluded(kind, id, !this.isExcluded(kind, id));
+                this.renderCategories(kind);
                 return;
+            }
+            case 'showCategories':
+            case 'hideCategories': {
+                // Only the genres or studios matching the search
+                const kind = button.getAttribute('data-kind');
+                this.root.querySelectorAll('.bhsCategory[data-kind="' + kind + '"]:not(.hide)').forEach((row) => {
+                    this.setExcluded(kind, row.getAttribute('data-id'), action === 'hideCategories');
+                });
+                this.renderCategories(kind);
+                return;
+            }
+            case 'editGenre': {
+                const id = category.getAttribute('data-id');
+                this.editingGenreId = this.editingGenreId === id ? null : id;
+                this.renderCategories('Genres');
+                return;
+            }
             default:
                 break;
         }
@@ -471,20 +614,21 @@ class ConfigPage {
     }
 
     onInput(event) {
-        if (event.target.classList.contains('bhsStudioSearch')) {
-            this.filterStudios();
+        if (event.target.classList.contains('bhsCategorySearch')) {
+            this.filterCategories(event.target.getAttribute('data-kind'));
         }
     }
 
     onChange(event) {
-        const studioId = event.target.getAttribute('data-studio');
-        if (studioId) {
-            this.setStudioIncluded(studioId, event.target.checked);
+        const field = event.target.getAttribute('data-field');
+        if (!field) {
             return;
         }
 
-        const field = event.target.getAttribute('data-field');
-        if (!field) {
+        const category = event.target.closest('.bhsCategory');
+        if (category) {
+            this.setGenreSetting(category.getAttribute('data-id'), field === 'GenreColor' ? 'Color' : 'ItemId', event.target.value);
+            this.renderCategories('Genres');
             return;
         }
 
@@ -560,6 +704,8 @@ export function init(view, settings, options) {
 
         const config = results[0];
         config.ExcludedStudios = config.ExcludedStudios || [];
+        config.ExcludedGenres = config.ExcludedGenres || [];
+        config.Genres = config.Genres || [];
         if (!config.Language) {
             // Not chosen yet: the language of the Jellyfin interface if available, English otherwise
             config.Language = window.BetterHomeSections.resolveLanguage(settings);

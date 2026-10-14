@@ -62,23 +62,23 @@
         music: { route: 'music', tabs: { genres: 6 } }
     };
 
-    /** Duotone colors (shadows, highlights) of the genre tiles, the same as Seerr. */
-    const GENRE_TONES = [
-        ['991B1B', 'FCA5A5'],
-        ['1F2937', 'F87171'],
-        ['032541', '01B4E4'],
-        ['1F2937', '60A5FA'],
-        ['1F2937', '2864D2'],
-        ['92400E', 'FCD34D'],
-        ['065F46', '6EE7B7'],
-        ['087D29', '21CB51'],
-        ['5B21B6', 'C4B5FD'],
-        ['777E0D', 'E4ED55'],
-        ['552C01', 'D47C1D'],
-        ['1F2937', 'D1D5DB'],
-        ['9D174D', 'F9A8D4'],
-        ['480C8B', 'A96BEF']
-    ];
+    /** Duotone colors (shadows, highlights) of the genre pictures, the same as Seerr. Keys are saved in the settings. */
+    const GENRE_TONES = {
+        red: ['991B1B', 'FCA5A5'],
+        darkred: ['1F2937', 'F87171'],
+        orange: ['92400E', 'FCD34D'],
+        darkorange: ['552C01', 'D47C1D'],
+        yellow: ['777E0D', 'E4ED55'],
+        lightgreen: ['065F46', '6EE7B7'],
+        green: ['087D29', '21CB51'],
+        lightblue: ['1F2937', '60A5FA'],
+        blue: ['032541', '01B4E4'],
+        darkblue: ['1F2937', '2864D2'],
+        purple: ['5B21B6', 'C4B5FD'],
+        darkpurple: ['480C8B', 'A96BEF'],
+        pink: ['9D174D', 'F9A8D4'],
+        gray: ['1F2937', 'D1D5DB']
+    };
 
     /**
      * The section types: library / item they use, available orders, default view mode and how they are loaded and rendered.
@@ -678,25 +678,70 @@
         });
     }
 
-    /** Genres with a random item of each genre (BhsImageUrl) and a random color (BhsTone) to illustrate them. */
+    /** The color and media chosen for a genre in the settings, empty for random. */
+    function getGenreSetting(ctx, genreId) {
+        return ctx.genreSettings.find(function (setting) {
+            return setting.GenreId === genreId;
+        }) || { Color: '', ItemId: '' };
+    }
+
+    /** The media chosen in the settings to illustrate some genres, by id. */
+    function fetchChosenGenreItems(ctx, genres) {
+        const ids = genres.map(function (genre) {
+            return getGenreSetting(ctx, genre.Id).ItemId;
+        }).filter(Boolean);
+        if (!ids.length) {
+            return Promise.resolve({});
+        }
+        return fetchItems(ctx, { Ids: ids.join(',') }).then(function (items) {
+            const itemsById = {};
+            items.forEach(function (item) {
+                itemsById[item.Id] = item;
+            });
+            return itemsById;
+        });
+    }
+
+    /**
+     * Shown genres with an item of the genre (BhsImageUrl) and a color (BhsTone) to illustrate them:
+     * the ones chosen in the settings, random ones otherwise.
+     */
     function fetchGenreTiles(section, ctx) {
         const landscape = section.ViewMode === 'Landscape';
         const imageType = landscape ? 'Backdrop' : 'Primary';
         const path = isMusicLibrary(section.Library) ? 'MusicGenres' : 'Genres';
+        const isIncluded = function (genre) {
+            return ctx.excludedGenres.indexOf(genre.Id) === -1;
+        };
 
-        return fetchCategories(section, ctx, path, IMAGE_TYPES).then(function (genres) {
-            return pickGenreItems(section, ctx, genres, imageType).then(function (picks) {
-                const tones = shuffle(GENRE_TONES);
-                genres.forEach(function (genre, index) {
-                    const item = picks[genre.Id];
-                    if (item) {
-                        genre.BhsImageUrl = getImageUrl(ctx, item.Id, imageType, getImageTag(item, imageType), landscape);
-                    } else if (getImageTag(genre, imageType)) {
-                        genre.BhsImageUrl = getImageUrl(ctx, genre.Id, imageType, getImageTag(genre, imageType), landscape);
+        return fetchCategories(section, ctx, path, IMAGE_TYPES, isIncluded).then(function (genres) {
+            return fetchChosenGenreItems(ctx, genres).then(function (chosenItems) {
+                // The genres whose chosen media is missing or has no picture of the right shape get a random one
+                const items = {};
+                genres.forEach(function (genre) {
+                    const item = chosenItems[getGenreSetting(ctx, genre.Id).ItemId];
+                    if (item && getImageTag(item, imageType)) {
+                        items[genre.Id] = item;
                     }
-                    genre.BhsTone = tones[index % tones.length];
                 });
-                return genres;
+                const randomGenres = genres.filter(function (genre) {
+                    return !items[genre.Id];
+                });
+
+                return pickGenreItems(section, ctx, randomGenres, imageType).then(function (picks) {
+                    const tones = shuffle(Object.keys(GENRE_TONES));
+                    genres.forEach(function (genre, index) {
+                        const item = items[genre.Id] || picks[genre.Id];
+                        if (item) {
+                            genre.BhsImageUrl = getImageUrl(ctx, item.Id, imageType, getImageTag(item, imageType), landscape);
+                        } else if (getImageTag(genre, imageType)) {
+                            genre.BhsImageUrl = getImageUrl(ctx, genre.Id, imageType, getImageTag(genre, imageType), landscape);
+                        }
+                        const color = getGenreSetting(ctx, genre.Id).Color;
+                        genre.BhsTone = GENRE_TONES[color] || GENRE_TONES[tones[index % tones.length]];
+                    });
+                    return genres;
+                });
             });
         });
     }
@@ -941,6 +986,20 @@
         context.putImageData(imageData, 0, 0);
     }
 
+    /** Loads a picture and draws it in duotone in a canvas, which is then faded in. */
+    function drawGenrePicture(canvas, url, tone) {
+        const image = new Image();
+        image.onload = function () {
+            try {
+                drawDuotone(canvas, image, hexToRgb(tone[0]), hexToRgb(tone[1]));
+                canvas.classList.add('bhs-genreImage-ready');
+            } catch (error) {
+                console.error(LOG_PREFIX, 'Failed to draw a genre picture', error);
+            }
+        };
+        image.src = url;
+    }
+
     let genreImageObserver;
 
     /** Draws the genre pictures of a section when they become visible. */
@@ -948,23 +1007,10 @@
         if (!genreImageObserver) {
             genreImageObserver = new IntersectionObserver(function (entries) {
                 entries.forEach(function (entry) {
-                    if (!entry.isIntersecting) {
-                        return;
+                    if (entry.isIntersecting) {
+                        genreImageObserver.unobserve(entry.target);
+                        drawGenrePicture(entry.target, entry.target.getAttribute('data-src'), entry.target.getAttribute('data-tone').split(','));
                     }
-                    const canvas = entry.target;
-                    genreImageObserver.unobserve(canvas);
-
-                    const tone = canvas.getAttribute('data-tone').split(',');
-                    const image = new Image();
-                    image.onload = function () {
-                        try {
-                            drawDuotone(canvas, image, hexToRgb(tone[0]), hexToRgb(tone[1]));
-                            canvas.classList.add('bhs-genreImage-ready');
-                        } catch (error) {
-                            console.error(LOG_PREFIX, 'Failed to draw a genre picture', error);
-                        }
-                    };
-                    image.src = canvas.getAttribute('data-src');
                 });
             }, { rootMargin: '0px 400px' });
         }
@@ -972,6 +1018,23 @@
         itemsContainer.querySelectorAll('canvas.bhs-genreImage-picture:not(.bhs-genreImage-ready)').forEach(function (canvas) {
             genreImageObserver.observe(canvas);
         });
+    }
+
+    /** Renders the picture of a genre with the given color (random if empty) and media (none if null), for the settings page. */
+    function renderGenrePreview(element, name, color, item) {
+        const tone = GENRE_TONES[color] || GENRE_TONES[shuffle(Object.keys(GENRE_TONES))[0]];
+        element.classList.add('bhs-genreImage');
+        element.style.setProperty('--bhs-tone-dark', '#' + tone[0]);
+        element.style.setProperty('--bhs-tone-light', '#' + tone[1]);
+        element.innerHTML = (item ? '<canvas class="bhs-genreImage-picture"></canvas>' : '')
+            + '<div class="bhs-genreImage-overlay"></div>'
+            + '<div class="bhs-genreImage-name">' + escapeHtml(name) + '</div>';
+
+        if (item) {
+            const imageType = getImageTag(item, 'Backdrop') ? 'Backdrop' : 'Primary';
+            const url = window.ApiClient.getScaledImageUrl(item.Id, { type: imageType, tag: getImageTag(item, imageType), maxWidth: 640, quality: 90 });
+            drawGenrePicture(element.querySelector('canvas'), url, tone);
+        }
     }
 
     /** Genre and studio cards, rendered like the ones of the genres and studios pages of Jellyfin. */
@@ -1055,6 +1118,8 @@
             userSettings: userSettings || {},
             t: t,
             excludedStudios: settings.ExcludedStudios || [],
+            excludedGenres: settings.ExcludedGenres || [],
+            genreSettings: settings.Genres || [],
             userViews: []
         };
 
@@ -1124,6 +1189,8 @@
         getSectionTitle: getSectionTitle,
         getItemTypes: getItemTypes,
         isMusicLibrary: isMusicLibrary,
-        getContentCount: getContentCount
+        getContentCount: getContentCount,
+        genreTones: GENRE_TONES,
+        renderGenrePreview: renderGenrePreview
     };
 })();

@@ -92,6 +92,8 @@ public class BetterHomeSectionsController : ControllerBase
                 .Select(ToClientSection)
                 .OfType<ClientSection>()
                 .ToArray(),
+            ExcludedGenres = configuration.ExcludedGenres,
+            Genres = configuration.Genres,
             ExcludedStudios = configuration.ExcludedStudios
         };
     }
